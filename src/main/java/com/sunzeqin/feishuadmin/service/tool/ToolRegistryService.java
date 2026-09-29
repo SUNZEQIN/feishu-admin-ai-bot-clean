@@ -53,8 +53,9 @@ public class ToolRegistryService {
                    一般默认使用 open_id，然后根据返回的 memberType/bot 字段区分用户和机器人。
 
                 2. application.list_installed_apps
-                   作用：查询企业安装的应用列表。
-                   参数：无。
+                   作用：查询当前提问用户可用的应用列表。
+                   参数：openId。
+                   openId 必须使用当前消息发送人的 open_id，由系统自动注入，LLM 不需要猜。
                    返回：applications，每个应用包含 appId 和 appName。
                    用途：当用户要拉机器人进群时，用机器人名称匹配 appName，拿到 cli_ 开头的 appId。
 
@@ -171,8 +172,16 @@ public class ToolRegistryService {
     }
 
     private ToolResult listInstalledApplications(ToolCall call) {
-        // 调飞书接口查询企业安装应用列表。
-        List<FeishuApplication> applications = openApi.listInstalledApplications();
+        // 从参数里读取提问用户 open_id。
+        String openId = stringParam(call, "openId");
+
+        // open_id 不能为空，因为飞书接口要按用户查询可用应用。
+        if (openId.isBlank()) {
+            return ToolResult.failed(call.name(), "application.list_installed_apps 缺少 openId 参数");
+        }
+
+        // 调飞书接口查询当前提问用户可用应用列表。
+        List<FeishuApplication> applications = openApi.listInstalledApplications(openId);
 
         // 把应用对象转成简单 Map，方便 LLM 在 observation 里阅读。
         List<Map<String, Object>> applicationMaps = new ArrayList<>();
@@ -187,7 +196,8 @@ public class ToolRegistryService {
         }
 
         // 返回工具成功结果。
-        return ToolResult.success(call.name(), "查询企业安装应用成功", Map.of(
+        return ToolResult.success(call.name(), "查询当前用户可用应用成功", Map.of(
+                "openId", openId,
                 "applications", applicationMaps
         ));
     }

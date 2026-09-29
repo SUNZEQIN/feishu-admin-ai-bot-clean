@@ -54,12 +54,13 @@ public class FeishuOpenApiService {
     }
 
     /**
-     * 查询企业安装的应用列表。
+     * 查询指定用户可用的应用列表。
      *
-     * @return 企业安装应用列表
+     * @param openId 提问用户 open_id
+     * @return 用户可用应用列表
      */
-    public List<FeishuApplication> listInstalledApplications() {
-        // 保存所有分页查询出来的企业应用。
+    public List<FeishuApplication> listInstalledApplications(String openId) {
+        // 保存所有分页查询出来的用户可用应用。
         List<FeishuApplication> applications = new ArrayList<>();
 
         // 飞书分页标记，第一页为空。
@@ -70,41 +71,45 @@ public class FeishuOpenApiService {
             // 当前页使用的 page_token。
             String currentPageToken = pageToken;
 
-            // 拼接查询企业安装应用接口地址，飞书这个接口要求必须传 lang，page_size 最大只能是 50。
-            String requestUri = "/open-apis/application/v6/applications?lang=zh_cn&page_size=50";
+            // 拼接查询用户可用应用接口地址，open_id 使用提问人的 open_id。
+            String requestUri = "/open-apis/application/v1/user/visible_apps"
+                    + "?open_id=" + openId
+                    + "&page_size=50";
 
             // 如果不是第一页，就把上一页返回的 page_token 带上。
             if (!currentPageToken.isBlank()) {
                 requestUri = requestUri + "&page_token=" + currentPageToken;
             }
 
-            // 打印查询企业应用列表的真实飞书请求入参。
-            log.info("飞书接口请求：方法=GET，接口=/open-apis/application/v6/applications，语言={}，分页大小={}，分页标记={}，请求地址={}",
-                    "zh_cn", 50, currentPageToken, requestUri);
+            // 打印查询用户可用应用列表的真实飞书请求入参。
+            log.info("飞书接口请求：方法=GET，接口=/open-apis/application/v1/user/visible_apps，用户openId={}，分页大小={}，分页标记={}，请求地址={}",
+                    openId, 50, currentPageToken, requestUri);
 
-            // 调用飞书查询企业安装应用接口。
+            // 调用飞书查询用户可用应用接口。
             JsonNode response = restClient.get()
                     .uri(requestUri)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenantAccessToken())
                     .retrieve()
                     .body(JsonNode.class);
 
-            // 打印查询企业应用列表的飞书响应摘要。
-            log.info("飞书接口响应：方法=GET，接口=/open-apis/application/v6/applications，状态码={}，消息={}，应用数量={}，是否还有下一页={}，下一页标记={}",
+            // 打印查询用户可用应用列表的飞书响应摘要。
+            JsonNode appItems = applicationItems(response.path("data"));
+
+            log.info("飞书接口响应：方法=GET，接口=/open-apis/application/v1/user/visible_apps，状态码={}，消息={}，应用数量={}，是否还有下一页={}，下一页标记={}",
                     response.path("code").asInt(-1),
                     response.path("msg").asText(""),
-                    response.path("data").path("items").size(),
+                    appItems.size(),
                     response.path("data").path("has_more").asBoolean(false),
                     response.path("data").path("page_token").asText(""));
 
             // 检查飞书返回 code 是否为 0，不为 0 就抛异常。
-            ensureOk(response, "查询企业安装应用失败");
+            ensureOk(response, "查询用户可用应用失败");
 
             // data 节点里包含当前页应用和下一页 page_token。
             JsonNode data = response.path("data");
 
             // 遍历当前页应用。
-            for (JsonNode item : data.path("items")) {
+            for (JsonNode item : appItems) {
                 // 读取应用 ID。
                 String appId = item.path("app_id").asText("");
 
@@ -114,6 +119,16 @@ public class FeishuOpenApiService {
                 // 有些返回结构可能把名称放在 name 字段，这里做兼容。
                 if (appName.isBlank()) {
                     appName = item.path("name").asText("");
+                }
+
+                // 兼容部分接口返回 app.name 的结构。
+                if (appName.isBlank()) {
+                    appName = item.path("app").path("app_name").asText("");
+                }
+
+                // 兼容部分接口返回 app.app_id 的结构。
+                if (appId.isBlank()) {
+                    appId = item.path("app").path("app_id").asText("");
                 }
 
                 // 只保留有 app_id 的应用，避免把无效数据交给 Agent。
@@ -340,5 +355,30 @@ public class FeishuOpenApiService {
             // 抛异常给上层，由上层组织用户可读的失败回复。
             throw new IllegalStateException(message + "：" + detail);
         }
+    }
+
+    private JsonNode applicationItems(JsonNode data) {
+        // 新接口常见返回字段：items。
+        if (data.path("items").isArray()) {
+            return data.path("items");
+        }
+
+        // 兼容可能的应用列表字段：app_list。
+        if (data.path("app_list").isArray()) {
+            return data.path("app_list");
+        }
+
+        // 兼容可能的应用列表字段：apps。
+        if (data.path("apps").isArray()) {
+            return data.path("apps");
+        }
+
+        // 兼容可能的应用列表字段：applications。
+        if (data.path("applications").isArray()) {
+            return data.path("applications");
+        }
+
+        // 找不到列表时返回 missing node，遍历时不会产生数据。
+        return data.path("items");
     }
 }

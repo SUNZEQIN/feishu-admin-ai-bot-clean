@@ -122,12 +122,15 @@ public class AgentOrchestratorService {
                 return result;
             }
 
+            // 给部分工具补充系统上下文参数，例如当前提问人的 open_id。
+            ToolCall toolCall = enrichToolCall(decision.toolCall(), event);
+
             // 打印工具执行前日志。
             log.info("智能体准备执行工具：消息ID={}，步骤={}，工具={}，入参={}",
-                    event.messageId(), step, decision.toolCall().name(), decision.toolCall().params());
+                    event.messageId(), step, toolCall.name(), toolCall.params());
 
             // 执行工具。
-            ToolResult result = toolRegistry.execute(decision.toolCall());
+            ToolResult result = toolRegistry.execute(toolCall);
 
             // 打印工具执行结果日志。
             log.info("智能体工具结果：消息ID={}，步骤={}，工具={}，是否成功={}，说明={}，数据={}",
@@ -212,6 +215,18 @@ public class AgentOrchestratorService {
             log.warn("智能体兜底流程失败：消息ID={}，错误={}", event.messageId(), e.getMessage());
             return new AgentRunResult(false, "⚠️ 没有完成处理\n\n🔎 失败原因：" + e.getMessage());
         }
+    }
+
+    private ToolCall enrichToolCall(ToolCall toolCall, FeishuMessageEvent event) {
+        // 查询用户可用应用时，必须用当前提问人的 open_id，不能让模型自己猜。
+        if ("application.list_installed_apps".equals(toolCall.name())) {
+            Map<String, Object> params = new java.util.HashMap<>(toolCall.params());
+            params.put("openId", event.openId());
+            return new ToolCall(toolCall.name(), params);
+        }
+
+        // 其它工具保持原样。
+        return toolCall;
     }
 
     private List<ChatMember> filteredMembers(String chatId, String memberIdType, boolean bot, List<String> targetNames) {

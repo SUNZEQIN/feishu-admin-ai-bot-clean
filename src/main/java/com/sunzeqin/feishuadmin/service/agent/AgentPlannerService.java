@@ -154,7 +154,7 @@ public class AgentPlannerService {
                 2. 第一步必须调用 im.list_chat_members，memberIdType=open_id，查询当前群里的用户成员。
                 3. 如果目标里包含普通用户，就从 im.list_chat_members 的 members 里按姓名匹配用户，取 memberId 作为 userOpenIds。
                 4. 如果用户说“群里的用户”“所有用户”“当前群用户”，就把 members 里 bot=false 的成员都放入 userOpenIds。
-                5. 如果目标里包含机器人、助手、应用、bot，必须调用 application.list_installed_apps。
+                5. 如果目标里包含机器人、助手、应用、bot，必须调用 application.list_installed_apps 查询当前提问用户可用的应用。
                 6. 机器人不能用 open_id 拉入新群，机器人必须用 application.list_installed_apps 返回的 appId，也就是 cli_ 开头的应用 ID。
                 7. 如果目标里指定了机器人名称，就用机器人名称和 applications 里的 appName 做包含匹配或近似匹配，匹配到后取 appId 放入 botAppIds。
                 8. 如果用户说“群里的机器人”“所有机器人”，但 im.list_chat_members 没返回机器人名称，就从用户原话里的机器人名称匹配 applications；如果原话也没有明确机器人名称，就如实说明无法判断要拉哪些机器人。
@@ -166,7 +166,7 @@ public class AgentPlannerService {
 
                 固定工具优先规则：
                 1. 如果当前可用固定工具能完成用户目标，必须优先使用固定工具。
-                2. 当前固定工具主要覆盖：查询群成员、查询企业安装应用、创建群聊。
+                2. 当前固定工具主要覆盖：查询群成员、查询当前用户可用应用、创建群聊。
                 3. 如果用户目标涉及固定工具没有覆盖的能力，例如多维表格、云文档、日程、会议、审批、通讯录高级查询，就调用 cli.run_skill。
                 4. cli.run_skill 是长尾能力执行器，不是最终回复；它会读取本地 Skill，先查 lark-cli help/schema，再执行 CLI。
                 5. 调用 cli.run_skill 时，domain 要按业务选择：多维表格用 base，云文档用 docs，日程用 calendar，会议用 vc，群聊消息用 im，通讯录用 contact，审批用 approval。

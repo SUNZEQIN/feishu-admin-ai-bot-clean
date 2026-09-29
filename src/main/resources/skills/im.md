@@ -27,12 +27,26 @@
 ```bash
 lark-cli im --help
 lark-cli im +chat-members-list --help
+lark-cli im +chat-messages-list --help
+lark-cli im +messages-search --help
 ```
 
 查询当前群成员时优先使用：
 
 ```bash
 lark-cli im +chat-members-list --chat-id <sourceChatId> --as bot --page-all --page-size 50 --format json
+```
+
+读取当前群聊天记录时优先使用：
+
+```bash
+lark-cli im +chat-messages-list --chat-id <sourceChatId> --as bot --page-all --page-size 20 --format json
+```
+
+按关键词搜索消息时使用：
+
+```bash
+lark-cli im +messages-search --chat-id <sourceChatId> --query <关键词> --as bot --page-all --page-size 20 --format json
 ```
 
 ## 回复要求
