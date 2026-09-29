@@ -1,11 +1,20 @@
+# syntax=docker/dockerfile:1.6
+
 FROM maven:3.9.9-eclipse-temurin-17 AS build
 
 WORKDIR /app
 
 COPY pom.xml .
+
+# 先缓存 Maven 依赖。后续只改源码时，这一层可以复用，避免每次重新下载依赖。
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -DskipTests dependency:go-offline
+
 COPY src ./src
 
-RUN mvn -DskipTests package
+# 打包时继续复用 Maven 本地仓库缓存。
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -DskipTests package
 
 FROM eclipse-temurin:17-jre
 
