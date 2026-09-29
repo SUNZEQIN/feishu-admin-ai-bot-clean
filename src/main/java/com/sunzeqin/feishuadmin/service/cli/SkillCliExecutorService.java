@@ -264,12 +264,10 @@ public class SkillCliExecutorService {
         // 用配置里的真实命令路径替换 lark-cli。
         normalized.set(0, properties.getCliCommand());
 
-        // 如果是领域命令，第二个参数应该和 domain 一致；shortcut 可能以 + 开头；schema 是查询命令结构，也允许。
+        // 校验 lark-cli 的业务域。docs 任务可能需要 im 辅助读取群消息或发链接，所以不能强制等于当前 domain。
         if (normalized.size() > 1) {
             String firstArg = normalized.get(1);
-            if (!domain.equals(firstArg) && !firstArg.startsWith("+") && !"schema".equals(firstArg)) {
-                throw new IllegalArgumentException("CLI 命令业务域不匹配，期望=" + domain + "，实际=" + firstArg);
-            }
+            ensureCommandDomainAllowed(firstArg);
         }
 
         // 返回规范化命令。
@@ -348,6 +346,21 @@ public class SkillCliExecutorService {
 
         // 不在白名单里就拒绝。
         throw new IllegalArgumentException("CLI 业务域不允许：" + domain);
+    }
+
+    private void ensureCommandDomainAllowed(String commandDomain) {
+        // shortcut 命令以 + 开头，例如 +chat-members-list，由 lark-cli 自己路由，允许执行。
+        if (commandDomain.startsWith("+")) {
+            return;
+        }
+
+        // schema 是只读查询命令结构，允许执行。
+        if ("schema".equals(commandDomain)) {
+            return;
+        }
+
+        // 普通业务域必须在白名单里。
+        ensureDomainAllowed(commandDomain);
     }
 
     private String normalizeDomain(String domain) {

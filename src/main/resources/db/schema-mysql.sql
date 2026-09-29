@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS agent_conversation_memory (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    memory_scope VARCHAR(32) NOT NULL COMMENT '记忆范围：USER=个人记忆，GROUP=群聊共享记忆',
-    memory_key VARCHAR(255) NOT NULL COMMENT '记忆键：USER使用chatId:openId，GROUP使用chatId',
+    memory_scope VARCHAR(32) NOT NULL COMMENT '记忆范围：GROUP=群聊，PRIVATE=私聊',
+    memory_key VARCHAR(255) NOT NULL COMMENT '记忆键：当前使用chat_id，一条真实消息只保存一行',
     chat_id VARCHAR(128) NOT NULL COMMENT '飞书会话ID',
     user_open_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '发送人open_id',
     user_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '发送人user_id',

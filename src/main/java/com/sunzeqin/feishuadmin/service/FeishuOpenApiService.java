@@ -70,8 +70,8 @@ public class FeishuOpenApiService {
             // 当前页使用的 page_token。
             String currentPageToken = pageToken;
 
-            // 拼接查询企业安装应用接口地址，飞书这个接口要求必须传 lang。
-            String requestUri = "/open-apis/application/v6/applications?lang=zh_cn&page_size=100";
+            // 拼接查询企业安装应用接口地址，飞书这个接口要求必须传 lang，page_size 最大只能是 50。
+            String requestUri = "/open-apis/application/v6/applications?lang=zh_cn&page_size=50";
 
             // 如果不是第一页，就把上一页返回的 page_token 带上。
             if (!currentPageToken.isBlank()) {
@@ -80,7 +80,7 @@ public class FeishuOpenApiService {
 
             // 打印查询企业应用列表的真实飞书请求入参。
             log.info("飞书接口请求：方法=GET，接口=/open-apis/application/v6/applications，语言={}，分页大小={}，分页标记={}，请求地址={}",
-                    "zh_cn", 100, currentPageToken, requestUri);
+                    "zh_cn", 50, currentPageToken, requestUri);
 
             // 调用飞书查询企业安装应用接口。
             JsonNode response = restClient.get()

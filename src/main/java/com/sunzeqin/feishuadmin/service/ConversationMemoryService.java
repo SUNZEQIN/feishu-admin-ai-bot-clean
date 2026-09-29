@@ -17,7 +17,7 @@ import java.util.List;
 /**
  * 会话记忆服务。
  *
- * <p>作用：把个人记忆和群聊共享记忆保存到 MySQL，让团队协作上下文在服务重启后也不会丢。</p>
+ * <p>作用：把真实对话消息保存到 MySQL。用户消息保存一条，机器人回复保存一条。</p>
  *
  * @author sunzeqin
  */
@@ -26,11 +26,11 @@ public class ConversationMemoryService {
     // 当前服务使用的日志对象。
     private static final Logger log = LoggerFactory.getLogger(ConversationMemoryService.class);
 
-    // 个人记忆范围。
-    private static final String USER_SCOPE = "USER";
-
-    // 群聊共享记忆范围。
+    // 群聊记忆范围。
     private static final String GROUP_SCOPE = "GROUP";
+
+    // 私聊记忆范围。
+    private static final String PRIVATE_SCOPE = "PRIVATE";
 
     // 飞书配置，用来读取记忆开关和最大记忆条数。
     private final FeishuProperties properties;
@@ -52,49 +52,34 @@ public class ConversationMemoryService {
             return "";
         }
 
-        // 读取当前用户在当前群里的个人记忆。
-        List<ConversationMemoryMessage> userMessages = readMessages(USER_SCOPE, userMemoryKey(event));
-
-        // 读取当前群聊的共享记忆。
-        List<ConversationMemoryMessage> groupMessages = readMessages(GROUP_SCOPE, groupMemoryKey(event));
+        // 按当前会话读取最近记忆。群聊和私聊都以 chat_id 为主线，不重复存储两份。
+        List<ConversationMemoryMessage> messages = readMessages(chatMemoryScope(event), chatMemoryKey(event));
 
         // 保存提示词里的记忆文本。
         StringBuilder builder = new StringBuilder();
 
-        // 写入个人记忆标题。
-        builder.append("【个人记忆】\n");
+        // 写入会话记忆标题。
+        builder.append("【会话记忆】\n");
 
-        // 追加个人记忆内容。
-        appendMessages(builder, userMessages);
-
-        // 写入群聊共享记忆标题。
-        builder.append("【群聊共享记忆】\n");
-
-        // 追加群聊共享记忆内容。
-        appendMessages(builder, groupMessages);
+        // 追加会话记忆内容。
+        appendMessages(builder, messages);
 
         // 打印记忆读取日志。
-        log.info("会话记忆读取：消息ID={}，个人记忆Key={}，个人条数={}，群聊记忆Key={}，群聊条数={}",
-                event.messageId(), userMemoryKey(event), userMessages.size(), groupMemoryKey(event), groupMessages.size());
+        log.info("会话记忆读取：消息ID={}，范围={}，记忆Key={}，历史条数={}",
+                event.messageId(), chatMemoryScope(event), chatMemoryKey(event), messages.size());
 
         // 返回历史记忆文本。
         return builder.toString();
     }
 
     public void saveUserMessage(FeishuMessageEvent event) {
-        // 保存用户消息到个人记忆。
-        save(event, USER_SCOPE, userMemoryKey(event), "user", event.text());
-
-        // 保存用户消息到群聊共享记忆。
-        save(event, GROUP_SCOPE, groupMemoryKey(event), "user", event.text());
+        // 保存用户真实消息。只落一行，不再同时写个人记忆和群聊记忆。
+        save(event, "user", event.text());
     }
 
     public void saveAssistantMessage(FeishuMessageEvent event, String reply) {
-        // 保存机器人回复到个人记忆。
-        save(event, USER_SCOPE, userMemoryKey(event), "assistant", reply);
-
-        // 保存机器人回复到群聊共享记忆。
-        save(event, GROUP_SCOPE, groupMemoryKey(event), "assistant", reply);
+        // 保存机器人真实回复。只落一行，不再同时写个人记忆和群聊记忆。
+        save(event, "assistant", reply);
     }
 
     private List<ConversationMemoryMessage> readMessages(String scope, String memoryKey) {
@@ -122,7 +107,7 @@ public class ConversationMemoryService {
         return messages;
     }
 
-    private void save(FeishuMessageEvent event, String scope, String memoryKey, String role, String content) {
+    private void save(FeishuMessageEvent event, String role, String content) {
         // 如果记忆功能关闭，就不保存。
         if (!properties.isMemoryEnabled()) {
             return;
@@ -133,7 +118,13 @@ public class ConversationMemoryService {
             return;
         }
 
-        // 写入一条记忆。
+        // 获取当前会话的记忆范围。
+        String scope = chatMemoryScope(event);
+
+        // 获取当前会话的记忆键。
+        String memoryKey = chatMemoryKey(event);
+
+        // 写入一条真实消息。
         jdbcTemplate.update("""
                         INSERT INTO agent_conversation_memory
                         (memory_scope, memory_key, chat_id, user_open_id, user_id, role, content, created_at)
@@ -151,7 +142,7 @@ public class ConversationMemoryService {
         trimOldMessages(scope, memoryKey);
 
         // 打印记忆写入日志。
-        log.info("会话记忆写入：消息ID={}，范围={}，记忆Key={}，角色={}",
+        log.info("会话记忆写入：消息ID={}，范围={}，记忆Key={}，角色={}，说明=真实消息只保存一条",
                 event.messageId(), scope, memoryKey, role);
     }
 
@@ -185,32 +176,19 @@ public class ConversationMemoryService {
         }
     }
 
-    private String userMemoryKey(FeishuMessageEvent event) {
-        // 用 chatId + 用户标识隔离个人记忆。
-        return safe(event.chatId()) + ":" + userKey(event);
-    }
-
-    private String groupMemoryKey(FeishuMessageEvent event) {
-        // 群聊共享记忆只按 chatId 隔离。
+    private String chatMemoryKey(FeishuMessageEvent event) {
+        // 群聊和私聊都用 chatId 作为会话记忆键。
         return safe(event.chatId());
     }
 
-    private String userKey(FeishuMessageEvent event) {
-        // 优先用 open_id 作为用户隔离标识。
-        String userKey = event.openId();
-
-        // open_id 为空时降级使用 user_id。
-        if (userKey == null || userKey.isBlank()) {
-            userKey = event.userId();
+    private String chatMemoryScope(FeishuMessageEvent event) {
+        // group 表示群聊，共享群上下文。
+        if ("group".equalsIgnoreCase(event.chatType())) {
+            return GROUP_SCOPE;
         }
 
-        // user_id 也为空时，使用 unknown，避免空指针。
-        if (userKey == null || userKey.isBlank()) {
-            userKey = "unknown";
-        }
-
-        // 返回用户隔离标识。
-        return userKey;
+        // 非 group 都按私聊处理。
+        return PRIVATE_SCOPE;
     }
 
     private String safe(String value) {
