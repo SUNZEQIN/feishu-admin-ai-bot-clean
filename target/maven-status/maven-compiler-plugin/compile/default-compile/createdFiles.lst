@@ -1,4 +1,5 @@
 com\sunzeqin\feishuadmin\utils\TextIntentUtils.class
+com\sunzeqin\feishuadmin\pojo\FeishuApplication.class
 com\sunzeqin\feishuadmin\pojo\UrlVerificationResponse.class
 com\sunzeqin\feishuadmin\service\FeishuEventParserService.class
 com\sunzeqin\feishuadmin\controller\FeishuEventController.class

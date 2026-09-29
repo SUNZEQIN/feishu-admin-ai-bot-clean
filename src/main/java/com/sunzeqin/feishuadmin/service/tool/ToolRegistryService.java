@@ -1,6 +1,7 @@
 package com.sunzeqin.feishuadmin.service.tool;
 
 import com.sunzeqin.feishuadmin.pojo.ChatMember;
+import com.sunzeqin.feishuadmin.pojo.FeishuApplication;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolCall;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
 import com.sunzeqin.feishuadmin.service.FeishuOpenApiService;
@@ -44,7 +45,13 @@ public class ToolRegistryService {
                    注意：飞书查询群成员接口不支持 app_id，不要传 app_id。
                    一般默认使用 open_id，然后根据返回的 memberType/bot 字段区分用户和机器人。
 
-                2. im.create_chat
+                2. application.list_installed_apps
+                   作用：查询企业安装的应用列表。
+                   参数：无。
+                   返回：applications，每个应用包含 appId 和 appName。
+                   用途：当用户要拉机器人进群时，用机器人名称匹配 appName，拿到 cli_ 开头的 appId。
+
+                3. im.create_chat
                    作用：创建群聊。
                    参数：chatName, userOpenIds, botAppIds。
                    userOpenIds 是用户 open_id 列表；botAppIds 是机器人 app_id 列表。
@@ -59,6 +66,14 @@ public class ToolRegistryService {
             // 根据工具名称分发到具体执行方法。
             if ("im.list_chat_members".equals(call.name())) {
                 ToolResult result = listChatMembers(call);
+                log.info("工具调用结果：工具名称={}，是否成功={}，说明={}，数据={}",
+                        result.tool(), result.success(), result.message(), result.data());
+                return result;
+            }
+
+            // 根据工具名称分发到查询企业安装应用工具。
+            if ("application.list_installed_apps".equals(call.name())) {
+                ToolResult result = listInstalledApplications(call);
                 log.info("工具调用结果：工具名称={}，是否成功={}，说明={}，数据={}",
                         result.tool(), result.success(), result.message(), result.data());
                 return result;
@@ -129,6 +144,28 @@ public class ToolRegistryService {
                 "chatId", chatId,
                 "memberIdType", memberIdType,
                 "members", memberMaps
+        ));
+    }
+
+    private ToolResult listInstalledApplications(ToolCall call) {
+        // 调飞书接口查询企业安装应用列表。
+        List<FeishuApplication> applications = openApi.listInstalledApplications();
+
+        // 把应用对象转成简单 Map，方便 LLM 在 observation 里阅读。
+        List<Map<String, Object>> applicationMaps = new ArrayList<>();
+
+        // 遍历应用列表。
+        for (FeishuApplication application : applications) {
+            // 保存应用关键字段。
+            applicationMaps.add(Map.of(
+                    "appId", application.appId(),
+                    "appName", application.appName()
+            ));
+        }
+
+        // 返回工具成功结果。
+        return ToolResult.success(call.name(), "查询企业安装应用成功", Map.of(
+                "applications", applicationMaps
         ));
     }
 

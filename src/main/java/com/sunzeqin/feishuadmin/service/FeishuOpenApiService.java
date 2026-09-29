@@ -3,6 +3,7 @@ package com.sunzeqin.feishuadmin.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.sunzeqin.feishuadmin.config.FeishuProperties;
 import com.sunzeqin.feishuadmin.pojo.ChatMember;
+import com.sunzeqin.feishuadmin.pojo.FeishuApplication;
 import com.sunzeqin.feishuadmin.utils.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,83 @@ public class FeishuOpenApiService {
         this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
         // 保存 JSON 工具类。
         this.jsonUtils = jsonUtils;
+    }
+
+    /**
+     * 查询企业安装的应用列表。
+     *
+     * @return 企业安装应用列表
+     */
+    public List<FeishuApplication> listInstalledApplications() {
+        // 保存所有分页查询出来的企业应用。
+        List<FeishuApplication> applications = new ArrayList<>();
+
+        // 飞书分页标记，第一页为空。
+        String pageToken = "";
+
+        // 循环拉取所有分页，直到飞书不再返回 page_token。
+        do {
+            // 当前页使用的 page_token。
+            String currentPageToken = pageToken;
+
+            // 拼接查询企业安装应用接口地址。
+            String requestUri = "/open-apis/application/v6/applications?page_size=100";
+
+            // 如果不是第一页，就把上一页返回的 page_token 带上。
+            if (!currentPageToken.isBlank()) {
+                requestUri = requestUri + "&page_token=" + currentPageToken;
+            }
+
+            // 打印查询企业应用列表的真实飞书请求入参。
+            log.info("飞书接口请求：方法=GET，接口=/open-apis/application/v6/applications，分页大小={}，分页标记={}，请求地址={}",
+                    100, currentPageToken, requestUri);
+
+            // 调用飞书查询企业安装应用接口。
+            JsonNode response = restClient.get()
+                    .uri(requestUri)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenantAccessToken())
+                    .retrieve()
+                    .body(JsonNode.class);
+
+            // 打印查询企业应用列表的飞书响应摘要。
+            log.info("飞书接口响应：方法=GET，接口=/open-apis/application/v6/applications，状态码={}，消息={}，应用数量={}，是否还有下一页={}，下一页标记={}",
+                    response.path("code").asInt(-1),
+                    response.path("msg").asText(""),
+                    response.path("data").path("items").size(),
+                    response.path("data").path("has_more").asBoolean(false),
+                    response.path("data").path("page_token").asText(""));
+
+            // 检查飞书返回 code 是否为 0，不为 0 就抛异常。
+            ensureOk(response, "查询企业安装应用失败");
+
+            // data 节点里包含当前页应用和下一页 page_token。
+            JsonNode data = response.path("data");
+
+            // 遍历当前页应用。
+            for (JsonNode item : data.path("items")) {
+                // 读取应用 ID。
+                String appId = item.path("app_id").asText("");
+
+                // 读取应用名称。
+                String appName = item.path("app_name").asText("");
+
+                // 有些返回结构可能把名称放在 name 字段，这里做兼容。
+                if (appName.isBlank()) {
+                    appName = item.path("name").asText("");
+                }
+
+                // 只保留有 app_id 的应用，避免把无效数据交给 Agent。
+                if (!appId.isBlank()) {
+                    applications.add(new FeishuApplication(appId, appName));
+                }
+            }
+
+            // 读取下一页 page_token，如果为空说明已经没有下一页。
+            pageToken = data.path("page_token").asText("");
+        } while (!pageToken.isBlank());
+
+        // 返回不可变列表，防止外部修改查询结果。
+        return List.copyOf(applications);
     }
 
     /**

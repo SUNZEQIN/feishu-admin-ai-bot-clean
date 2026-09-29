@@ -147,18 +147,21 @@ public class AgentPlannerService {
                   "finalReply": "回复给用户的中文文本"
                 }
 
-                重要规则：
+                技能：创建群聊并拉入成员
                 0. 当前群 chatId 就是本次飞书事件所在群。用户在群聊里说“本群”“当前群”“群里”“这个群”，都默认指当前群 chatId。
-                1. 创建群聊前，必须先查询成员。
-                2. 要拉用户时，先调用 im.list_chat_members，memberIdType=open_id。
-                3. 要拉机器人时，也调用 im.list_chat_members，memberIdType=open_id，然后从返回成员里按 bot=true 或 memberType 判断机器人。
-                4. 拿到成员后，再调用 im.create_chat。
-                5. im.create_chat 的 userOpenIds 只能放用户 open_id。
-                6. im.create_chat 的 botAppIds 只能放机器人 app_id，也就是 cli_ 开头的应用 ID；如果 observations 里没有 cli_，不要编造。
-                7. 飞书查询群成员接口不支持 memberIdType=app_id，永远不要传 app_id。
-                8. 如果用户说“群里的用户和机器人都拉进去”，通常先查一次 open_id 成员列表，再从结果里筛用户和机器人。
-                9. 如果用户只说“只拉用户”，只需要从 open_id 结果里筛普通用户。
-                10. 如果用户只说“只拉机器人”，也只能从 open_id 结果里找 bot=true 的机器人；没有 cli_ app_id 时要如实说明无法邀请机器人。
+                1. 只要用户目标是创建群聊、拉人进群、把当前群成员复制到新群，就使用这个技能。
+                2. 第一步必须调用 im.list_chat_members，memberIdType=open_id，查询当前群里的用户成员。
+                3. 如果目标里包含普通用户，就从 im.list_chat_members 的 members 里按姓名匹配用户，取 memberId 作为 userOpenIds。
+                4. 如果用户说“群里的用户”“所有用户”“当前群用户”，就把 members 里 bot=false 的成员都放入 userOpenIds。
+                5. 如果目标里包含机器人、助手、应用、bot，必须调用 application.list_installed_apps。
+                6. 机器人不能用 open_id 拉入新群，机器人必须用 application.list_installed_apps 返回的 appId，也就是 cli_ 开头的应用 ID。
+                7. 如果目标里指定了机器人名称，就用机器人名称和 applications 里的 appName 做包含匹配或近似匹配，匹配到后取 appId 放入 botAppIds。
+                8. 如果用户说“群里的机器人”“所有机器人”，但 im.list_chat_members 没返回机器人名称，就从用户原话里的机器人名称匹配 applications；如果原话也没有明确机器人名称，就如实说明无法判断要拉哪些机器人。
+                9. im.create_chat 的 userOpenIds 只能放用户 open_id，botAppIds 只能放机器人 app_id，不要混用。
+                10. 飞书查询群成员接口不支持 memberIdType=app_id，永远不要传 app_id。
+                11. userOpenIds 和 botAppIds 都准备好以后，再调用 im.create_chat。
+                12. 不要编造用户 ID、机器人 appId、群 ID。缺少哪类 ID，就继续调用工具查询；工具也查不到时再 final_answer 说明原因。
+                13. 除非用户明确要求二次确认，否则创建群聊和拉入成员不需要额外确认。
 
                 当前群 chatId：%s
                 用户目标：%s
