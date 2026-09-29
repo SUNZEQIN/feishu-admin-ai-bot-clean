@@ -56,14 +56,15 @@ public class AgentPlannerService {
         return chatModel != null;
     }
 
-    public AgentDecision decide(String messageId, int step, String userText, String chatId, List<ToolResult> observations) {
+    public AgentDecision decide(String messageId, int step, String userText, String chatId,
+            String memoryText, List<ToolResult> observations) {
         // LLM 没启用时不应该调用这个方法。
         if (chatModel == null) {
             return new AgentDecision("final_answer", "LLM 未启用", null, "LLM 未启用");
         }
 
         // 构造 Agent 提示词。
-        String prompt = buildPrompt(userText, chatId, observations);
+        String prompt = buildPrompt(userText, chatId, memoryText, observations);
 
         // 打印规划输入摘要，排查提示词和 observation 数量。
         log.info("智能体规划输入：消息ID={}，步骤={}，会话ID={}，观察结果数量={}，用户文本={}",
@@ -112,7 +113,7 @@ public class AgentPlannerService {
                 .build();
     }
 
-    private String buildPrompt(String userText, String chatId, List<ToolResult> observations) {
+    private String buildPrompt(String userText, String chatId, String memoryText, List<ToolResult> observations) {
         // 把历史工具结果转成 JSON 字符串。
         String observationText = jsonUtils.write(observations);
 
@@ -164,13 +165,18 @@ public class AgentPlannerService {
                 13. 除非用户明确要求二次确认，否则创建群聊和拉入成员不需要额外确认。
 
                 当前群 chatId：%s
+
+                当前用户在当前会话里的历史记忆：
+                %s
+
                 用户目标：%s
 
                 %s
 
                 已有 observations：
                 %s
-                """.formatted(chatId, userText, toolRegistry.toolDescriptions(), observationText);
+                """.formatted(chatId, memoryText == null || memoryText.isBlank() ? "无" : memoryText,
+                userText, toolRegistry.toolDescriptions(), observationText);
     }
 
     private AgentDecision parseDecision(String answer) {

@@ -4,6 +4,15 @@ server:
 spring:
   application:
     name: feishu-admin-ai-bot-clean
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://mysql:3306/feishu_admin_bot?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USERNAME:feishu_bot}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-mysql.sql
 
 feishu:
   base-url: ${FEISHU_BASE_URL:https://open.feishu.cn}
@@ -17,3 +26,5 @@ feishu:
   llm-api-key: ${FEISHU_LLM_API_KEY:}
   llm-model-name: ${FEISHU_LLM_MODEL_NAME:deepseek-chat}
   llm-temperature: ${FEISHU_LLM_TEMPERATURE:0.0}
+  memory-enabled: ${FEISHU_MEMORY_ENABLED:true}
+  memory-max-messages: ${FEISHU_MEMORY_MAX_MESSAGES:20}

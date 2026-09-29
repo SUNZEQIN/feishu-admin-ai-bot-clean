@@ -9,3 +9,9 @@ services:
       - .env
     ports:
       - "${SERVER_PORT:-8082}:${SERVER_PORT:-8082}"
+    networks:
+      - feishu-net
+
+networks:
+  feishu-net:
+    external: true

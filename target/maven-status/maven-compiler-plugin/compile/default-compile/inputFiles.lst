@@ -5,6 +5,7 @@ D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishua
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\pojo\agent\AgentDecision.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\pojo\agent\AgentRunResult.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\pojo\ChatMember.java
+D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\pojo\ConversationMemoryMessage.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\pojo\FeishuApplication.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\pojo\FeishuMention.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\pojo\FeishuMessageEvent.java
@@ -14,6 +15,7 @@ D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishua
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\service\AdminAgentService.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\service\agent\AgentOrchestratorService.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\service\agent\AgentPlannerService.java
+D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\service\ConversationMemoryService.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\service\FeishuEventParserService.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\service\FeishuOpenApiService.java
 D:\codex项目\dify\feishu-admin-ai-bot-clean\src\main\java\com\sunzeqin\feishuadmin\service\MessageDedupService.java

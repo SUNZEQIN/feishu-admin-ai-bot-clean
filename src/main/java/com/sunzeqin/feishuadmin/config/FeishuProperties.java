@@ -44,6 +44,12 @@ public class FeishuProperties {
     // 意图识别温度，默认 0，保证输出稳定。
     private double llmTemperature = 0.0;
 
+    // 是否启用会话记忆。
+    private boolean memoryEnabled = true;
+
+    // 每个“会话 + 用户”最多保留多少条记忆消息。
+    private int memoryMaxMessages = 20;
+
     public String getBaseUrl() {
         // 返回飞书 OpenAPI 基础地址。
         return baseUrl;
@@ -152,5 +158,25 @@ public class FeishuProperties {
     public void setLlmTemperature(double llmTemperature) {
         // 设置模型温度。
         this.llmTemperature = llmTemperature;
+    }
+
+    public boolean isMemoryEnabled() {
+        // 返回是否启用会话记忆。
+        return memoryEnabled;
+    }
+
+    public void setMemoryEnabled(boolean memoryEnabled) {
+        // 设置是否启用会话记忆。
+        this.memoryEnabled = memoryEnabled;
+    }
+
+    public int getMemoryMaxMessages() {
+        // 返回最大记忆消息条数。
+        return memoryMaxMessages;
+    }
+
+    public void setMemoryMaxMessages(int memoryMaxMessages) {
+        // 设置最大记忆消息条数，最小值保护为 2。
+        this.memoryMaxMessages = Math.max(2, memoryMaxMessages);
     }
 }

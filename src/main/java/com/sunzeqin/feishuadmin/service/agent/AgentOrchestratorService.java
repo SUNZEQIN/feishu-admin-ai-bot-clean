@@ -6,6 +6,7 @@ import com.sunzeqin.feishuadmin.pojo.agent.AgentDecision;
 import com.sunzeqin.feishuadmin.pojo.agent.AgentRunResult;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolCall;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
+import com.sunzeqin.feishuadmin.service.ConversationMemoryService;
 import com.sunzeqin.feishuadmin.service.FeishuOpenApiService;
 import com.sunzeqin.feishuadmin.service.tool.ToolRegistryService;
 import com.sunzeqin.feishuadmin.utils.TextIntentUtils;
@@ -42,8 +43,11 @@ public class AgentOrchestratorService {
     // 飞书 OpenAPI 服务，兜底执行时会用到。
     private final FeishuOpenApiService openApi;
 
+    // 会话记忆服务，用来读取和保存用户上下文。
+    private final ConversationMemoryService memoryService;
+
     public AgentOrchestratorService(AgentPlannerService planner, ToolRegistryService toolRegistry,
-            FeishuOpenApiService openApi) {
+            FeishuOpenApiService openApi, ConversationMemoryService memoryService) {
         // 保存 Agent 规划器。
         this.planner = planner;
 
@@ -52,6 +56,9 @@ public class AgentOrchestratorService {
 
         // 保存 OpenAPI 服务。
         this.openApi = openApi;
+
+        // 保存会话记忆服务。
+        this.memoryService = memoryService;
     }
 
     public AgentRunResult run(FeishuMessageEvent event) {
@@ -59,11 +66,19 @@ public class AgentOrchestratorService {
         log.info("智能体开始执行：消息ID={}，会话ID={}，会话类型={}，最大步骤数={}，用户文本={}",
                 event.messageId(), event.chatId(), event.chatType(), MAX_STEPS, event.text());
 
+        // 读取当前用户在当前会话里的历史记忆。
+        String memoryText = memoryService.readMemoryText(event);
+
+        // 保存当前用户输入，供下一轮对话使用。
+        memoryService.saveUserMessage(event);
+
         // LLM Agent Loop 没启用时，使用本地稳定兜底流程。
         if (!planner.enabled()) {
             // 打印兜底模式日志。
             log.info("智能体进入兜底流程：消息ID={}，原因=规划器未启用", event.messageId());
-            return fallbackRun(event);
+            AgentRunResult result = fallbackRun(event);
+            memoryService.saveAssistantMessage(event, result.reply());
+            return result;
         }
 
         // 保存每一步工具观察结果。
@@ -76,7 +91,8 @@ public class AgentOrchestratorService {
                     event.messageId(), step, observations.size());
 
             // 让 LLM 基于当前 observations 决定下一步。
-            AgentDecision decision = planner.decide(event.messageId(), step, event.text(), event.chatId(), observations);
+            AgentDecision decision = planner.decide(event.messageId(), step, event.text(), event.chatId(),
+                    memoryText, observations);
 
             // 打印当前轮规划结果。
             log.info("智能体步骤决策：消息ID={}，步骤={}，决策类型={}，工具={}，原因={}，最终回复={}",
@@ -92,14 +108,18 @@ public class AgentOrchestratorService {
                 // 打印最终回复日志。
                 log.info("智能体最终回复：消息ID={}，步骤={}，回复={}",
                         event.messageId(), step, decision.finalReply());
-                return new AgentRunResult(true, decision.finalReply());
+                AgentRunResult result = new AgentRunResult(true, decision.finalReply());
+                memoryService.saveAssistantMessage(event, result.reply());
+                return result;
             }
 
             // 如果 LLM 说要调用工具但没给工具参数，直接结束。
             if (decision.toolCall() == null) {
                 // 打印缺少工具调用日志。
                 log.warn("智能体执行失败：消息ID={}，步骤={}，原因=缺少工具调用参数", event.messageId(), step);
-                return new AgentRunResult(false, "⚠️ Agent 没有给出可执行工具。");
+                AgentRunResult result = new AgentRunResult(false, "⚠️ Agent 没有给出可执行工具。");
+                memoryService.saveAssistantMessage(event, result.reply());
+                return result;
             }
 
             // 打印工具执行前日志。
@@ -121,14 +141,18 @@ public class AgentOrchestratorService {
                 // 打印工具失败导致 Agent 结束的日志。
                 log.warn("智能体执行失败：消息ID={}，步骤={}，工具={}，原因={}",
                         event.messageId(), step, result.tool(), result.message());
-                return new AgentRunResult(false, "⚠️ 执行失败\n\n🔎 原因：" + result.message());
+                AgentRunResult runResult = new AgentRunResult(false, "⚠️ 执行失败\n\n🔎 原因：" + result.message());
+                memoryService.saveAssistantMessage(event, runResult.reply());
+                return runResult;
             }
         }
 
         // 超过最大步数仍未结束，返回保护性提示。
         log.warn("智能体强制停止：消息ID={}，原因=超过最大步骤数，最大步骤数={}",
                 event.messageId(), MAX_STEPS);
-        return new AgentRunResult(false, "⚠️ 本次任务步骤过多，已停止执行，避免重复操作。");
+        AgentRunResult result = new AgentRunResult(false, "⚠️ 本次任务步骤过多，已停止执行，避免重复操作。");
+        memoryService.saveAssistantMessage(event, result.reply());
+        return result;
     }
 
     private AgentRunResult fallbackRun(FeishuMessageEvent event) {
