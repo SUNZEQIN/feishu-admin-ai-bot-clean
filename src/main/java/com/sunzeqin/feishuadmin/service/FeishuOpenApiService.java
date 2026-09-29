@@ -304,6 +304,18 @@ public class FeishuOpenApiService {
                 response.path("data"));
     }
 
+    /**
+     * 给 lark-cli 使用的 tenant_access_token。
+     *
+     * <p>作用：复用 Java OpenAPI 已经验证过的应用凭据，在执行 lark-cli 前写入 CLI 的 token store。</p>
+     *
+     * @return tenant_access_token 明文，只能传给 lark-cli，不允许打印到日志
+     */
+    public String tenantAccessTokenForCli() {
+        // 复用已有 token 缓存和刷新逻辑。
+        return tenantAccessToken();
+    }
+
     private synchronized String tenantAccessToken() {
         // 如果 token 已存在且距离过期还有 60 秒以上，就直接复用缓存。
         if (!tenantAccessToken.isBlank() && Instant.now().isBefore(tokenExpiresAt.minusSeconds(60))) {

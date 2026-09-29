@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.sunzeqin.feishuadmin.config.FeishuProperties;
 import com.sunzeqin.feishuadmin.pojo.cli.CliCommandResult;
 import com.sunzeqin.feishuadmin.pojo.cli.CliStepDecision;
+import com.sunzeqin.feishuadmin.service.FeishuOpenApiService;
 import com.sunzeqin.feishuadmin.utils.JsonUtils;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
@@ -13,6 +14,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -40,15 +42,22 @@ public class SkillCliExecutorService {
     // JSON 工具类，用来解析 CLI 规划器输出。
     private final JsonUtils jsonUtils;
 
+    // 飞书 OpenAPI 服务，用来获取 tenant_access_token 并写入 lark-cli。
+    private final FeishuOpenApiService openApiService;
+
     // CLI 内部规划器使用的大模型。
     private final ChatModel chatModel;
 
-    public SkillCliExecutorService(FeishuProperties properties, JsonUtils jsonUtils) {
+    public SkillCliExecutorService(FeishuProperties properties, JsonUtils jsonUtils,
+            FeishuOpenApiService openApiService) {
         // 保存飞书配置。
         this.properties = properties;
 
         // 保存 JSON 工具类。
         this.jsonUtils = jsonUtils;
+
+        // 保存飞书 OpenAPI 服务。
+        this.openApiService = openApiService;
 
         // 创建 CLI 内部规划器模型。
         this.chatModel = buildChatModel(properties);
@@ -293,6 +302,9 @@ public class SkillCliExecutorService {
 
     private CliCommandResult executeCommand(List<String> command) {
         try {
+            // 执行业务 CLI 前，先把最新 tenant_access_token 写入 lark-cli，避免 bot token_missing。
+            prepareTenantAccessTokenForCli(command);
+
             // 打印 CLI 执行入参。
             log.info("SkillCLI执行命令：命令={}", command);
 
@@ -337,6 +349,122 @@ public class SkillCliExecutorService {
 
             // 返回失败结果。
             return new CliCommandResult(String.join(" ", command), -1, "", e.getMessage());
+        }
+    }
+
+    private void prepareTenantAccessTokenForCli(List<String> command) {
+        // 非 lark-cli 命令不处理；正常情况下不会出现。
+        if (command == null || command.isEmpty()) {
+            return;
+        }
+
+        // 只处理配置里的 lark-cli 命令。
+        if (!properties.getCliCommand().equals(command.get(0))) {
+            return;
+        }
+
+        // config/auth/help/schema/skills 这类命令不需要 bot token，避免无意义写入。
+        if (!needTenantAccessToken(command)) {
+            return;
+        }
+
+        // appId 不能为空，否则 lark-cli 不知道 token 属于哪个应用。
+        if (properties.getAppId() == null || properties.getAppId().isBlank()) {
+            throw new IllegalStateException("写入 lark-cli tenant_access_token 失败：FEISHU_APP_ID 为空");
+        }
+
+        // 从 Java OpenAPI 服务拿最新 tenant_access_token，不打印 token 明文。
+        String token = openApiService.tenantAccessTokenForCli();
+        if (token == null || token.isBlank()) {
+            throw new IllegalStateException("写入 lark-cli tenant_access_token 失败：tenant_access_token 为空");
+        }
+
+        // 把 token 写入 lark-cli 的本地 token store。
+        setTenantAccessToken(token);
+    }
+
+    private boolean needTenantAccessToken(List<String> command) {
+        // 只有真实业务域命令才需要 token。
+        if (command.size() < 2) {
+            return false;
+        }
+
+        // 读取第二个参数。
+        String domain = command.get(1);
+
+        // 帮助和配置类命令不需要提前写 token。
+        if ("--help".equals(domain) || "-h".equals(domain)
+                || "config".equals(domain)
+                || "auth".equals(domain)
+                || "skills".equals(domain)
+                || "schema".equals(domain)) {
+            return false;
+        }
+
+        // 如果只是查询某个业务域 help，也不需要提前写 token。
+        if (command.contains("--help") || command.contains("-h")) {
+            return false;
+        }
+
+        // 其它 lark-cli 业务命令需要 token。
+        return true;
+    }
+
+    private void setTenantAccessToken(String token) {
+        // 组装写入 token 的 lark-cli 命令，token 通过 stdin 传入，不出现在命令行和日志里。
+        List<String> command = List.of(
+                properties.getCliCommand(),
+                "config",
+                "tenant-access-token",
+                "set",
+                "--app-id",
+                properties.getAppId()
+        );
+
+        try {
+            // 打印写入动作，不打印 token 明文。
+            log.info("SkillCLI写入tenant_access_token：appId={}，命令={}", properties.getAppId(), command);
+
+            // 创建写入 token 的进程。
+            Process process = new ProcessBuilder(command).start();
+
+            // 通过 stdin 写入 token。
+            try (OutputStream outputStream = process.getOutputStream()) {
+                outputStream.write(token.getBytes(StandardCharsets.UTF_8));
+                outputStream.flush();
+            }
+
+            // 异步读取标准输出。
+            CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(
+                    () -> readStream(process.getInputStream()));
+
+            // 异步读取错误输出。
+            CompletableFuture<String> stderrFuture = CompletableFuture.supplyAsync(
+                    () -> readStream(process.getErrorStream()));
+
+            // 等待写入完成。
+            boolean finished = process.waitFor(properties.getCliTimeoutSeconds(), TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new IllegalStateException("写入 lark-cli tenant_access_token 超时");
+            }
+
+            // 读取退出码和输出。
+            int exitCode = process.exitValue();
+            String stdout = stdoutFuture.get(5, TimeUnit.SECONDS);
+            String stderr = stderrFuture.get(5, TimeUnit.SECONDS);
+
+            // 写入失败时抛出异常，让上层返回真实错误。
+            if (exitCode != 0) {
+                throw new IllegalStateException("写入 lark-cli tenant_access_token 失败，退出码="
+                        + exitCode + "，标准输出=" + truncate(stdout) + "，错误输出=" + truncate(stderr));
+            }
+
+            // 打印写入成功日志，不打印 token。
+            log.info("SkillCLI写入tenant_access_token成功：appId={}，退出码={}", properties.getAppId(), exitCode);
+        } catch (Exception e) {
+            // 写入 token 失败时抛出异常。
+            throw new IllegalStateException("写入 lark-cli tenant_access_token 异常：" + e.getMessage(), e);
         }
     }
 
