@@ -2,6 +2,8 @@
 
 作者：sunzeqin
 
+依据：`D:/codex项目/lark-project/飞书CLI命令手册.md`，CLI 版本 `1.0.95`。
+
 ## 适用场景
 
 - 查询群成员。
@@ -26,9 +28,27 @@
 
 ```bash
 lark-cli im --help
+lark-cli im +chat-create --help
+lark-cli im +chat-list --help
 lark-cli im +chat-members-list --help
 lark-cli im +chat-messages-list --help
+lark-cli im +chat-search --help
+lark-cli im +chat-update --help
+lark-cli im +messages-send --help
+lark-cli im +messages-reply --help
+lark-cli im +messages-mget --help
 lark-cli im +messages-search --help
+lark-cli im +messages-edit --help
+lark-cli im +messages-read-status --help
+lark-cli im +message-read-users --help
+lark-cli im +threads-messages-list --help
+lark-cli im chat.members get --help
+lark-cli im chat.members create --help
+lark-cli im chat.members delete --help
+lark-cli im chat.members bots --help
+lark-cli im chats create --help
+lark-cli im chats get --help
+lark-cli im chats update --help
 ```
 
 查询当前群成员时优先使用：

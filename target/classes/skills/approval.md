@@ -2,6 +2,8 @@
 
 作者：sunzeqin
 
+依据：`D:/codex项目/lark-project/飞书CLI命令手册.md`，CLI 版本 `1.0.95`。
+
 ## 适用场景
 
 - 查询审批定义。
@@ -22,6 +24,23 @@
 
 ```bash
 lark-cli approval --help
+lark-cli approval approvals --help
+lark-cli approval instances --help
+lark-cli approval tasks --help
+lark-cli approval approvals get --help
+lark-cli approval approvals search --help
+lark-cli approval instances get --help
+lark-cli approval instances initiated --help
+lark-cli approval instances create --help
+lark-cli approval instances cancel --help
+lark-cli approval instances cc --help
+lark-cli approval tasks query --help
+lark-cli approval tasks approve --help
+lark-cli approval tasks reject --help
+lark-cli approval tasks add_sign --help
+lark-cli approval tasks transfer --help
+lark-cli approval tasks rollback --help
+lark-cli approval tasks remind --help
 ```
 
 ## 回复要求

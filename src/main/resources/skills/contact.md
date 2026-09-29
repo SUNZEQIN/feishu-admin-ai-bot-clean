@@ -2,6 +2,8 @@
 
 作者：sunzeqin
 
+依据：`D:/codex项目/lark-project/飞书CLI命令手册.md`，CLI 版本 `1.0.95`。
+
 ## 适用场景
 
 - 根据姓名、邮箱、手机号查询用户。
@@ -21,6 +23,10 @@
 
 ```bash
 lark-cli contact --help
+lark-cli contact +get-user --help
+lark-cli contact +search-user --help
+lark-cli contact +search-bot --help
+lark-cli contact user_profiles batch_query --help
 lark-cli im +chat-members-list --help
 ```
 

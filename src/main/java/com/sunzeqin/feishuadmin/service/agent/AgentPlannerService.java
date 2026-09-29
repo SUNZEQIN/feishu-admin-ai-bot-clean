@@ -169,7 +169,7 @@ public class AgentPlannerService {
                 2. 当前固定工具主要覆盖：查询群成员、查询当前用户可用应用、创建群聊。
                 3. 如果用户目标涉及固定工具没有覆盖的能力，例如多维表格、云文档、日程、会议、审批、通讯录高级查询，就调用 cli.run_skill。
                 4. cli.run_skill 是长尾能力执行器，不是最终回复；它会读取本地 Skill，先查 lark-cli help/schema，再执行 CLI。
-                5. 调用 cli.run_skill 时，domain 要按业务选择：多维表格用 base，云文档用 docs，日程用 calendar，会议用 vc，群聊消息用 im，通讯录用 contact，审批用 approval。
+                5. 调用 cli.run_skill 时，domain 要按业务选择：多维表格用 base，云文档用 docs，日程用 calendar，会议用 vc，妙记用 minutes，会议纪要用 note，群聊消息用 im，通讯录用 contact，审批用 approval，云盘/权限/评论用 drive，知识库用 wiki，Markdown 文档用 markdown，思维笔记用 mindnotes，画板用 whiteboard。
                 6. 调用 cli.run_skill 时，goal 必须保留用户完整目标，sourceChatId 必须传当前群 chatId。
 
                 当前群 chatId：%s

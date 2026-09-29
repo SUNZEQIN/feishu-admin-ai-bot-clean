@@ -67,7 +67,7 @@ public class ToolRegistryService {
                 4. cli.run_skill
                    作用：当固定工具无法完成需求时，使用本地 Skill + lark-cli 执行长尾飞书能力。
                    参数：domain, goal, sourceChatId。
-                   domain 只能是 im、base、docs、calendar、vc、contact、approval。
+                   domain 只能是 im、base、docs、calendar、vc、minutes、note、contact、approval、drive、wiki、markdown、mindnotes、whiteboard。
                    goal 是用户原始目标的完整中文描述。
                    sourceChatId 是当前飞书事件所在群或会话 ID。
                    注意：只有固定工具不满足时才使用这个工具；固定工具能完成时不要调用它。

@@ -32,4 +32,4 @@ feishu:
   cli-command: ${FEISHU_CLI_COMMAND:lark-cli}
   cli-max-steps: ${FEISHU_CLI_MAX_STEPS:10}
   cli-timeout-seconds: ${FEISHU_CLI_TIMEOUT_SECONDS:60}
-  cli-allowed-domains: ${FEISHU_CLI_ALLOWED_DOMAINS:im,base,docs,calendar,vc,contact,approval}
+  cli-allowed-domains: ${FEISHU_CLI_ALLOWED_DOMAINS:im,base,docs,calendar,vc,minutes,note,contact,approval,drive,wiki,markdown,mindnotes,whiteboard}
