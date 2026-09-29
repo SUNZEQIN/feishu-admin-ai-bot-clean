@@ -5,6 +5,7 @@ import com.sunzeqin.feishuadmin.pojo.FeishuApplication;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolCall;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
 import com.sunzeqin.feishuadmin.service.FeishuOpenApiService;
+import com.sunzeqin.feishuadmin.service.cli.SkillCliExecutorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -29,9 +30,15 @@ public class ToolRegistryService {
     // 飞书 OpenAPI 服务，实际接口调用由它完成。
     private final FeishuOpenApiService openApi;
 
-    public ToolRegistryService(FeishuOpenApiService openApi) {
+    // Skill + CLI 执行服务，固定工具不满足时由它兜底。
+    private final SkillCliExecutorService skillCliExecutor;
+
+    public ToolRegistryService(FeishuOpenApiService openApi, SkillCliExecutorService skillCliExecutor) {
         // 保存飞书 OpenAPI 服务。
         this.openApi = openApi;
+
+        // 保存 Skill + CLI 执行服务。
+        this.skillCliExecutor = skillCliExecutor;
     }
 
     public String toolDescriptions() {
@@ -55,6 +62,14 @@ public class ToolRegistryService {
                    作用：创建群聊。
                    参数：chatName, userOpenIds, botAppIds。
                    userOpenIds 是用户 open_id 列表；botAppIds 是机器人 app_id 列表。
+
+                4. cli.run_skill
+                   作用：当固定工具无法完成需求时，使用本地 Skill + lark-cli 执行长尾飞书能力。
+                   参数：domain, goal, sourceChatId。
+                   domain 只能是 im、base、docs、calendar、vc、contact、approval。
+                   goal 是用户原始目标的完整中文描述。
+                   sourceChatId 是当前飞书事件所在群或会话 ID。
+                   注意：只有固定工具不满足时才使用这个工具；固定工具能完成时不要调用它。
                 """;
     }
 
@@ -82,6 +97,14 @@ public class ToolRegistryService {
             // 根据工具名称分发到创建群聊工具。
             if ("im.create_chat".equals(call.name())) {
                 ToolResult result = createChat(call);
+                log.info("工具调用结果：工具名称={}，是否成功={}，说明={}，数据={}",
+                        result.tool(), result.success(), result.message(), result.data());
+                return result;
+            }
+
+            // 根据工具名称分发到 Skill + CLI 兜底工具。
+            if ("cli.run_skill".equals(call.name())) {
+                ToolResult result = runSkill(call);
                 log.info("工具调用结果：工具名称={}，是否成功={}，说明={}，数据={}",
                         result.tool(), result.success(), result.message(), result.data());
                 return result;
@@ -167,6 +190,23 @@ public class ToolRegistryService {
         return ToolResult.success(call.name(), "查询企业安装应用成功", Map.of(
                 "applications", applicationMaps
         ));
+    }
+
+    private ToolResult runSkill(ToolCall call) {
+        // 从参数里读取业务域。
+        String domain = stringParam(call, "domain");
+
+        // 从参数里读取用户目标。
+        String goal = stringParam(call, "goal");
+
+        // 从参数里读取来源会话 ID。
+        String sourceChatId = stringParam(call, "sourceChatId");
+
+        // 调用 Skill + CLI 执行器。
+        Map<String, Object> data = skillCliExecutor.runSkill(domain, goal, sourceChatId);
+
+        // 返回执行结果。
+        return ToolResult.success(call.name(), "Skill + CLI 执行完成", data);
     }
 
     private ToolResult createChat(ToolCall call) {

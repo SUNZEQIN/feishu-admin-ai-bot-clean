@@ -50,6 +50,21 @@ public class FeishuProperties {
     // 每个“会话 + 用户”最多保留多少条记忆消息。
     private int memoryMaxMessages = 20;
 
+    // 是否启用 Skill + CLI 兜底执行器。
+    private boolean cliEnabled = true;
+
+    // lark-cli 命令路径，容器里一般就是 lark-cli。
+    private String cliCommand = "lark-cli";
+
+    // Skill + CLI 内部最多执行多少轮。
+    private int cliMaxSteps = 8;
+
+    // 单条 CLI 命令最大等待秒数。
+    private int cliTimeoutSeconds = 60;
+
+    // 允许通过 Skill + CLI 执行的业务域。
+    private String cliAllowedDomains = "im,base,docs,calendar,vc,contact,approval";
+
     public String getBaseUrl() {
         // 返回飞书 OpenAPI 基础地址。
         return baseUrl;
@@ -178,5 +193,55 @@ public class FeishuProperties {
     public void setMemoryMaxMessages(int memoryMaxMessages) {
         // 设置最大记忆消息条数，最小值保护为 2。
         this.memoryMaxMessages = Math.max(2, memoryMaxMessages);
+    }
+
+    public boolean isCliEnabled() {
+        // 返回是否启用 Skill + CLI。
+        return cliEnabled;
+    }
+
+    public void setCliEnabled(boolean cliEnabled) {
+        // 设置是否启用 Skill + CLI。
+        this.cliEnabled = cliEnabled;
+    }
+
+    public String getCliCommand() {
+        // 返回 lark-cli 命令路径。
+        return cliCommand;
+    }
+
+    public void setCliCommand(String cliCommand) {
+        // 设置 lark-cli 命令路径。
+        this.cliCommand = cliCommand;
+    }
+
+    public int getCliMaxSteps() {
+        // 返回 CLI 最大执行轮数。
+        return cliMaxSteps;
+    }
+
+    public void setCliMaxSteps(int cliMaxSteps) {
+        // 设置 CLI 最大执行轮数，最小值保护为 1。
+        this.cliMaxSteps = Math.max(1, cliMaxSteps);
+    }
+
+    public int getCliTimeoutSeconds() {
+        // 返回 CLI 单命令超时时间。
+        return cliTimeoutSeconds;
+    }
+
+    public void setCliTimeoutSeconds(int cliTimeoutSeconds) {
+        // 设置 CLI 单命令超时时间，最小值保护为 5 秒。
+        this.cliTimeoutSeconds = Math.max(5, cliTimeoutSeconds);
+    }
+
+    public String getCliAllowedDomains() {
+        // 返回允许的 CLI 业务域。
+        return cliAllowedDomains;
+    }
+
+    public void setCliAllowedDomains(String cliAllowedDomains) {
+        // 设置允许的 CLI 业务域。
+        this.cliAllowedDomains = cliAllowedDomains;
     }
 }

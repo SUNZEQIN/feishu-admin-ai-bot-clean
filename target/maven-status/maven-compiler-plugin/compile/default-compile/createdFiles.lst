@@ -1,4 +1,5 @@
 com\sunzeqin\feishuadmin\utils\TextIntentUtils.class
+com\sunzeqin\feishuadmin\service\cli\SkillCliExecutorService.class
 com\sunzeqin\feishuadmin\pojo\ConversationMemoryMessage.class
 com\sunzeqin\feishuadmin\pojo\FeishuApplication.class
 com\sunzeqin\feishuadmin\service\FeishuEventParserService.class
@@ -6,7 +7,9 @@ com\sunzeqin\feishuadmin\config\FeishuProperties.class
 com\sunzeqin\feishuadmin\FeishuAdminAiBotApplication.class
 com\sunzeqin\feishuadmin\service\tool\ToolRegistryService.class
 com\sunzeqin\feishuadmin\pojo\FeishuMention.class
+com\sunzeqin\feishuadmin\pojo\cli\CliStepDecision.class
 com\sunzeqin\feishuadmin\pojo\agent\AgentRunResult.class
+com\sunzeqin\feishuadmin\pojo\cli\CliCommandResult.class
 com\sunzeqin\feishuadmin\service\MessageDedupService.class
 com\sunzeqin\feishuadmin\pojo\UrlVerificationResponse.class
 com\sunzeqin\feishuadmin\controller\FeishuEventController.class

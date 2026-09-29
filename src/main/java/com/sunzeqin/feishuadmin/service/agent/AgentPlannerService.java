@@ -164,6 +164,14 @@ public class AgentPlannerService {
                 12. 不要编造用户 ID、机器人 appId、群 ID。缺少哪类 ID，就继续调用工具查询；工具也查不到时再 final_answer 说明原因。
                 13. 除非用户明确要求二次确认，否则创建群聊和拉入成员不需要额外确认。
 
+                固定工具优先规则：
+                1. 如果当前可用固定工具能完成用户目标，必须优先使用固定工具。
+                2. 当前固定工具主要覆盖：查询群成员、查询企业安装应用、创建群聊。
+                3. 如果用户目标涉及固定工具没有覆盖的能力，例如多维表格、云文档、日程、会议、审批、通讯录高级查询，就调用 cli.run_skill。
+                4. cli.run_skill 是长尾能力执行器，不是最终回复；它会读取本地 Skill，先查 lark-cli help/schema，再执行 CLI。
+                5. 调用 cli.run_skill 时，domain 要按业务选择：多维表格用 base，云文档用 docs，日程用 calendar，会议用 vc，群聊消息用 im，通讯录用 contact，审批用 approval。
+                6. 调用 cli.run_skill 时，goal 必须保留用户完整目标，sourceChatId 必须传当前群 chatId。
+
                 当前群 chatId：%s
 
                 当前用户在当前会话里的历史记忆：
