@@ -1,0 +1,5 @@
+# Created at 2026-09-29T18:56:56.510
+Boot Manifest-JAR contains absolute paths in classpath 'D:\kaifa\feishu-cli-ai-bot\.m2\repository\org\apache\maven\surefire\surefire-booter\3.2.5\surefire-booter-3.2.5.jar'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+

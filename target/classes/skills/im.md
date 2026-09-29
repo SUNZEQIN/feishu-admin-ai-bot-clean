@@ -18,6 +18,7 @@
 4. 机器人入群通常需要 `app_id`，也就是 `cli_` 开头的应用 ID。
 5. 如果要从当前群复制成员，先查询当前群成员，再按名称筛选。
 6. 如果命令失败，要根据 stderr/stdout 调整命令，不要重复执行同一条错误命令。
+7. 查询列表类数据时优先使用 `--page-all`，如果命令需要 `--page-size`，不要超过 50。
 
 ## 常见查询
 
@@ -31,7 +32,7 @@ lark-cli im +chat-members-list --help
 查询当前群成员时优先使用：
 
 ```bash
-lark-cli im +chat-members-list --chat-id <sourceChatId> --as bot --format json
+lark-cli im +chat-members-list --chat-id <sourceChatId> --as bot --page-all --page-size 50 --format json
 ```
 
 ## 回复要求

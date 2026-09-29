@@ -202,6 +202,21 @@ public class ToolRegistryService {
         // 从参数里读取来源会话 ID。
         String sourceChatId = stringParam(call, "sourceChatId");
 
+        // CLI 业务域不能为空。
+        if (domain.isBlank()) {
+            return ToolResult.failed(call.name(), "cli.run_skill 缺少 domain 参数");
+        }
+
+        // 用户目标不能为空。
+        if (goal.isBlank()) {
+            return ToolResult.failed(call.name(), "cli.run_skill 缺少 goal 参数");
+        }
+
+        // 来源会话不能为空，Skill 里“本群/当前群”都要靠它解析。
+        if (sourceChatId.isBlank()) {
+            return ToolResult.failed(call.name(), "cli.run_skill 缺少 sourceChatId 参数");
+        }
+
         // 调用 Skill + CLI 执行器。
         Map<String, Object> data = skillCliExecutor.runSkill(domain, goal, sourceChatId);
 

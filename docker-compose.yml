@@ -7,6 +7,16 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # lark-cli 配置目录，挂载到宿主机后，容器重建不会丢配置。
+      LARKSUITE_CLI_CONFIG_DIR: /app/.lark-cli-config
+      # lark-cli 的 Hermes 自动绑定模式会读取 HERMES_HOME/.env。
+      HERMES_HOME: /app
+    volumes:
+      # 保存 lark-cli 的本地配置和授权状态。
+      - ./.lark-cli-config:/app/.lark-cli-config
+      # 让 lark-cli config bind 能读取 FEISHU_APP_ID / FEISHU_APP_SECRET。
+      - ./.env:/app/.env:ro
     ports:
       - "${SERVER_PORT:-8082}:${SERVER_PORT:-8082}"
     networks:

@@ -12,12 +12,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -69,8 +71,8 @@ public class SkillCliExecutorService {
         // 校验业务域是否允许。
         ensureDomainAllowed(normalizedDomain);
 
-        // 读取本地 Skill 文档。
-        String skillText = readSkill(normalizedDomain);
+        // 读取所有允许业务域的 Skill 文档，让复合任务可以跨域执行。
+        String skillText = readAllowedSkills(normalizedDomain);
 
         // 保存所有 CLI 执行观察结果。
         List<CliCommandResult> observations = new ArrayList<>();
@@ -80,6 +82,12 @@ public class SkillCliExecutorService {
 
         // 保存 help 结果。
         observations.add(helpResult);
+
+        // help 都失败时直接停止，避免后面模型在没有 CLI 能力说明的情况下继续猜命令。
+        if (helpResult.exitCode() != 0) {
+            throw new IllegalStateException("CLI 帮助查询失败，业务域=" + normalizedDomain
+                    + "，错误=" + firstNotBlank(helpResult.stderr(), helpResult.stdout()));
+        }
 
         // 打印 Skill + CLI 开始日志。
         log.info("SkillCLI开始：业务域={}，目标={}，来源群ID={}，最大步骤数={}",
@@ -119,7 +127,7 @@ public class SkillCliExecutorService {
             }
 
             // 校验命令是否允许执行。
-            List<String> command = normalizeCommand(decision.command(), normalizedDomain);
+            List<String> command = normalizeCommand(decision.command());
 
             // 执行 CLI 命令。
             CliCommandResult commandResult = executeCommand(command);
@@ -193,17 +201,26 @@ public class SkillCliExecutorService {
                 6. 当前群、当前会话、这个群、本群都指 sourceChatId。
                 7. 如果缺参数，先用 CLI 查询对象，不要向用户索要 open_id、chat_id、app_id。
                 8. 写操作执行成功后，必须 final_answer 汇总真实结果。
+                9. 一个用户目标可以拆成多个 CLI 命令，命令业务域允许在白名单内灵活切换。
+                10. 主业务域只表示用户目标的主要方向，不限制后续命令只能调用这个业务域。
+                11. 复合任务要按真实步骤跨域执行，例如：
+                    - 会议 + IM：先用 im/contact 找人，再用 calendar/vc 创建会议或日程，再用 im 通知参会人。
+                    - 文档 + IM：先用 im 读取群消息或找收件人，再用 docs 创建/写入文档，再用 im 发送链接。
+                    - 多维表格 + IM：先用 base 处理表格，再用 im 把结果发给群或用户。
+                12. 不要因为当前业务域是 docs、vc、calendar、base 就拒绝执行 im/contact 等辅助命令，只要命令业务域在白名单内即可。
+                13. 如果要调用其它业务域，但还不知道命令用法，先执行该业务域的 --help 或 schema 查询。
 
                 业务域：%s
+                允许切换的业务域：%s
                 来源群ID：%s
                 用户目标：%s
 
-                Skill 内容：
+                Skill 内容集合：
                 %s
 
                 已有 CLI observations：
                 %s
-                """.formatted(domain, sourceChatId, goal, skillText, observationText);
+                """.formatted(domain, properties.getCliAllowedDomains(), sourceChatId, goal, skillText, observationText);
     }
 
     private CliStepDecision parseDecision(String answer) {
@@ -238,7 +255,7 @@ public class SkillCliExecutorService {
         return new CliStepDecision(type, reason, command, finalReply);
     }
 
-    private List<String> normalizeCommand(List<String> command, String domain) {
+    private List<String> normalizeCommand(List<String> command) {
         // 命令不能为空。
         if (command == null || command.isEmpty()) {
             throw new IllegalArgumentException("CLI 命令不能为空");
@@ -264,7 +281,7 @@ public class SkillCliExecutorService {
         // 用配置里的真实命令路径替换 lark-cli。
         normalized.set(0, properties.getCliCommand());
 
-        // 校验 lark-cli 的业务域。docs 任务可能需要 im 辅助读取群消息或发链接，所以不能强制等于当前 domain。
+        // 校验 lark-cli 的业务域。复合任务允许在白名单业务域内灵活切换。
         if (normalized.size() > 1) {
             String firstArg = normalized.get(1);
             ensureCommandDomainAllowed(firstArg);
@@ -282,6 +299,14 @@ public class SkillCliExecutorService {
             // 创建进程。
             Process process = new ProcessBuilder(command).start();
 
+            // 异步读取标准输出，避免输出较多时进程缓冲区写满导致卡死。
+            CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(
+                    () -> readStream(process.getInputStream()));
+
+            // 异步读取错误输出，避免错误信息较多时进程缓冲区写满导致卡死。
+            CompletableFuture<String> stderrFuture = CompletableFuture.supplyAsync(
+                    () -> readStream(process.getErrorStream()));
+
             // 等待命令执行完成。
             boolean finished = process.waitFor(properties.getCliTimeoutSeconds(), TimeUnit.SECONDS);
 
@@ -292,10 +317,10 @@ public class SkillCliExecutorService {
             }
 
             // 读取标准输出。
-            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String stdout = stdoutFuture.get(5, TimeUnit.SECONDS);
 
             // 读取错误输出。
-            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            String stderr = stderrFuture.get(5, TimeUnit.SECONDS);
 
             // 读取退出码。
             int exitCode = process.exitValue();
@@ -315,6 +340,16 @@ public class SkillCliExecutorService {
         }
     }
 
+    private String readStream(InputStream inputStream) {
+        try {
+            // 读取进程输出流并按 UTF-8 转成字符串。
+            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            // 输出流读取失败时返回错误文本，方便日志继续展示问题。
+            return "读取进程输出失败：" + e.getMessage();
+        }
+    }
+
     private String readSkill(String domain) {
         try {
             // 从 resources/skills 读取对应业务域 Skill。
@@ -331,6 +366,35 @@ public class SkillCliExecutorService {
             // Skill 读取失败时抛出业务异常。
             throw new IllegalStateException("读取 Skill 失败：" + domain, e);
         }
+    }
+
+    private String readAllowedSkills(String primaryDomain) {
+        // 保存合并后的 Skill 文档。
+        StringBuilder builder = new StringBuilder();
+
+        // 先放主业务域 Skill，方便模型优先理解当前任务方向。
+        appendSkill(builder, primaryDomain);
+
+        // 再放其它白名单业务域 Skill，方便模型处理跨域步骤。
+        for (String item : properties.getCliAllowedDomains().split(",")) {
+            String domain = item.trim().toLowerCase(Locale.ROOT);
+            if (!domain.isBlank() && !domain.equals(primaryDomain)) {
+                appendSkill(builder, domain);
+            }
+        }
+
+        // 返回所有允许业务域的 Skill 文档。
+        return builder.toString();
+    }
+
+    private void appendSkill(StringBuilder builder, String domain) {
+        // 追加 Skill 分隔标题，避免多个文档混在一起看不清。
+        builder.append("\n\n================ Skill Domain: ")
+                .append(domain)
+                .append(" ================\n");
+
+        // 追加具体 Skill 内容。
+        builder.append(readSkill(domain));
     }
 
     private void ensureDomainAllowed(String domain) {
@@ -407,5 +471,20 @@ public class SkillCliExecutorService {
 
         // 返回截断文本。
         return text.substring(0, 2000) + "...";
+    }
+
+    private String firstNotBlank(String first, String second) {
+        // 优先返回第一个非空文本。
+        if (first != null && !first.isBlank()) {
+            return truncate(first);
+        }
+
+        // 第一个为空时返回第二个非空文本。
+        if (second != null && !second.isBlank()) {
+            return truncate(second);
+        }
+
+        // 都为空时返回统一提示。
+        return "无输出";
     }
 }

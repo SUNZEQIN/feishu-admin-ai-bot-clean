@@ -30,6 +30,6 @@ feishu:
   memory-max-messages: ${FEISHU_MEMORY_MAX_MESSAGES:20}
   cli-enabled: ${FEISHU_CLI_ENABLED:true}
   cli-command: ${FEISHU_CLI_COMMAND:lark-cli}
-  cli-max-steps: ${FEISHU_CLI_MAX_STEPS:8}
+  cli-max-steps: ${FEISHU_CLI_MAX_STEPS:10}
   cli-timeout-seconds: ${FEISHU_CLI_TIMEOUT_SECONDS:60}
   cli-allowed-domains: ${FEISHU_CLI_ALLOWED_DOMAINS:im,base,docs,calendar,vc,contact,approval}
