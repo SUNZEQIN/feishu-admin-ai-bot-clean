@@ -1,0 +1,19 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: feishu-admin-ai-bot-clean
+
+feishu:
+  base-url: ${FEISHU_BASE_URL:https://open.feishu.cn}
+  app-id: ${FEISHU_APP_ID:}
+  app-secret: ${FEISHU_APP_SECRET:}
+  verification-token: ${FEISHU_VERIFICATION_TOKEN:}
+  processing-reply-enabled: ${FEISHU_PROCESSING_REPLY_ENABLED:true}
+  processing-reply-text: ${FEISHU_PROCESSING_REPLY_TEXT:⏳ 正在处理，请稍等...}
+  llm-enabled: ${FEISHU_LLM_ENABLED:false}
+  llm-base-url: ${FEISHU_LLM_BASE_URL:https://api.deepseek.com}
+  llm-api-key: ${FEISHU_LLM_API_KEY:}
+  llm-model-name: ${FEISHU_LLM_MODEL_NAME:deepseek-chat}
+  llm-temperature: ${FEISHU_LLM_TEMPERATURE:0.0}
