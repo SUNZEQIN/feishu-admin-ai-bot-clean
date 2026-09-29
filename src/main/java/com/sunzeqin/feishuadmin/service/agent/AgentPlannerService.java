@@ -151,13 +151,14 @@ public class AgentPlannerService {
                 0. 当前群 chatId 就是本次飞书事件所在群。用户在群聊里说“本群”“当前群”“群里”“这个群”，都默认指当前群 chatId。
                 1. 创建群聊前，必须先查询成员。
                 2. 要拉用户时，先调用 im.list_chat_members，memberIdType=open_id。
-                3. 要拉机器人时，先调用 im.list_chat_members，memberIdType=app_id。
+                3. 要拉机器人时，也调用 im.list_chat_members，memberIdType=open_id，然后从返回成员里按 bot=true 或 memberType 判断机器人。
                 4. 拿到成员后，再调用 im.create_chat。
                 5. im.create_chat 的 userOpenIds 只能放用户 open_id。
-                6. im.create_chat 的 botAppIds 只能放机器人 app_id。
-                7. 如果用户说“群里的用户和机器人都拉进去”，就需要用户和机器人两类成员。
-                8. 如果用户只说“只拉用户”，不要查 app_id。
-                9. 如果用户只说“只拉机器人”，不要查 open_id。
+                6. im.create_chat 的 botAppIds 只能放机器人 app_id，也就是 cli_ 开头的应用 ID；如果 observations 里没有 cli_，不要编造。
+                7. 飞书查询群成员接口不支持 memberIdType=app_id，永远不要传 app_id。
+                8. 如果用户说“群里的用户和机器人都拉进去”，通常先查一次 open_id 成员列表，再从结果里筛用户和机器人。
+                9. 如果用户只说“只拉用户”，只需要从 open_id 结果里筛普通用户。
+                10. 如果用户只说“只拉机器人”，也只能从 open_id 结果里找 bot=true 的机器人；没有 cli_ app_id 时要如实说明无法邀请机器人。
 
                 当前群 chatId：%s
                 用户目标：%s

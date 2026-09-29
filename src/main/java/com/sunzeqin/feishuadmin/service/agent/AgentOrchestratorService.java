@@ -153,14 +153,14 @@ public class AgentOrchestratorService {
             // 查询用户成员。
             List<ChatMember> users = includeUsers ? filteredMembers(event.chatId(), "open_id", false, targetNames) : List.of();
 
-            // 查询机器人成员。
-            List<ChatMember> bots = includeBots ? filteredMembers(event.chatId(), "app_id", true, targetNames) : List.of();
+            // 查询机器人成员；飞书查询群成员接口不支持 app_id，所以这里也用 open_id 查询后按 bot 字段过滤。
+            List<ChatMember> bots = includeBots ? filteredMembers(event.chatId(), "open_id", true, targetNames) : List.of();
 
             // 提取用户 open_id。
             List<String> userIds = memberIds(users);
 
-            // 提取机器人 app_id。
-            List<String> botIds = memberIds(bots);
+            // 提取机器人 app_id；只有 cli_ 开头的 ID 才能放进 botAppIds。
+            List<String> botIds = botAppIds(bots);
 
             // 通过工具注册表创建群聊，保持兜底流程也走工具入口。
             ToolResult result = toolRegistry.execute(new ToolCall("im.create_chat", Map.of(
@@ -261,6 +261,22 @@ public class AgentOrchestratorService {
         }
 
         // 返回成员 ID。
+        return ids;
+    }
+
+    private List<String> botAppIds(List<ChatMember> members) {
+        // 保存机器人 app_id。
+        List<String> ids = new ArrayList<>();
+
+        // 遍历机器人成员。
+        for (ChatMember member : members) {
+            // 只有 cli_ 开头的 ID 才是飞书应用 app_id。
+            if (member.memberId() != null && member.memberId().startsWith("cli_")) {
+                ids.add(member.memberId());
+            }
+        }
+
+        // 返回机器人 app_id。
         return ids;
     }
 

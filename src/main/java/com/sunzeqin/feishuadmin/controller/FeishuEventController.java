@@ -6,6 +6,7 @@ import com.sunzeqin.feishuadmin.pojo.FeishuMessageEvent;
 import com.sunzeqin.feishuadmin.pojo.UrlVerificationResponse;
 import com.sunzeqin.feishuadmin.service.AdminAgentService;
 import com.sunzeqin.feishuadmin.service.FeishuEventParserService;
+import com.sunzeqin.feishuadmin.service.MessageDedupService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -36,14 +37,19 @@ public class FeishuEventController {
     // 管理员机器人业务服务，真正处理消息事件。
     private final AdminAgentService agentService;
 
+    // 消息去重服务，避免飞书重试导致同一条消息回复多次。
+    private final MessageDedupService dedupService;
+
     public FeishuEventController(FeishuProperties properties, FeishuEventParserService parser,
-            AdminAgentService agentService) {
+            AdminAgentService agentService, MessageDedupService dedupService) {
         // 保存配置对象，后面校验飞书 URL verification token 会用到。
         this.properties = properties;
         // 保存事件解析器，后面解析飞书回调 JSON 会用到。
         this.parser = parser;
         // 保存业务服务，后面把消息事件交给它处理。
         this.agentService = agentService;
+        // 保存消息去重服务。
+        this.dedupService = dedupService;
     }
 
     @PostMapping("/api/feishu/events")
@@ -64,7 +70,14 @@ public class FeishuEventController {
 
         // 如果解析到了消息事件，就交给业务服务处理。
         if (event != null) {
-            agentService.handleMessage(event);
+            // 同一个 message_id 如果已经处理过，直接忽略，避免重复回复。
+            if (!dedupService.firstSeen(event.messageId())) {
+                log.info("FEISHU_EVENT_DUPLICATED messageId={}", event.messageId());
+                return ResponseEntity.ok(Map.of("ok", true, "duplicated", true));
+            }
+
+            // 后台异步处理消息，当前回调立即返回 200 给飞书，避免飞书超时重试。
+            agentService.handleMessageAsync(event);
         } else {
             // 如果不是当前系统关心的事件，只记录日志，不抛异常，避免飞书反复重试。
             String eventType = root.path("header").path("event_type").asText("");

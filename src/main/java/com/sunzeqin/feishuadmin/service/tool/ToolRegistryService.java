@@ -40,7 +40,9 @@ public class ToolRegistryService {
                 1. im.list_chat_members
                    作用：查询群成员。
                    参数：chatId, memberIdType。
-                   memberIdType 可选 open_id 或 app_id。
+                   memberIdType 只能是 open_id、user_id、union_id。
+                   注意：飞书查询群成员接口不支持 app_id，不要传 app_id。
+                   一般默认使用 open_id，然后根据返回的 memberType/bot 字段区分用户和机器人。
 
                 2. im.create_chat
                    作用：创建群聊。
@@ -94,6 +96,13 @@ public class ToolRegistryService {
 
         // memberIdType 为空时默认查 open_id。
         if (memberIdType.isBlank()) {
+            memberIdType = "open_id";
+        }
+
+        // 飞书这个接口不支持 app_id；如果 LLM 传错了，这里强制改成 open_id，避免接口 400。
+        if ("app_id".equals(memberIdType)) {
+            log.warn("TOOL_PARAM_FIXED tool={} field=memberIdType oldValue=app_id newValue=open_id reason=feishu_api_not_support_app_id",
+                    call.name());
             memberIdType = "open_id";
         }
 
