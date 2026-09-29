@@ -218,6 +218,7 @@ public class SkillCliExecutorService {
                     - 多维表格 + IM：先用 base 处理表格，再用 im 把结果发给群或用户。
                 12. 不要因为当前业务域是 docs、vc、calendar、base 就拒绝执行 im/contact 等辅助命令，只要命令业务域在白名单内即可。
                 13. 如果要调用其它业务域，但还不知道命令用法，先执行该业务域的 --help 或 schema 查询。
+                14. 本项目是管理员机器人项目，所有 lark-cli 业务命令必须使用 --as bot，不要使用 --as user。
 
                 业务域：%s
                 允许切换的业务域：%s
@@ -296,8 +297,56 @@ public class SkillCliExecutorService {
             ensureCommandDomainAllowed(firstArg);
         }
 
+        // 管理员机器人项目统一使用 bot 身份，避免模型误选 user 导致 token_missing。
+        normalizeIdentityAsBot(normalized);
+
         // 返回规范化命令。
         return normalized;
+    }
+
+    private void normalizeIdentityAsBot(List<String> command) {
+        // help/config/auth/skills/schema 这类命令不处理身份参数。
+        if (!needTenantAccessToken(command)) {
+            return;
+        }
+
+        // 记录是否已经出现 --as。
+        boolean hasAs = false;
+
+        // 遍历命令参数。
+        for (int i = 0; i < command.size(); i++) {
+            String part = command.get(i);
+
+            // 处理 --as bot 或 --as user。
+            if ("--as".equals(part)) {
+                hasAs = true;
+                if (i + 1 < command.size()) {
+                    String oldValue = command.get(i + 1);
+                    if (!"bot".equals(oldValue)) {
+                        log.warn("SkillCLI身份参数已修正：原身份={}，新身份=bot，原因=管理员机器人项目不使用user身份", oldValue);
+                        command.set(i + 1, "bot");
+                    }
+                } else {
+                    command.add("bot");
+                }
+            }
+
+            // 处理 --as=user 这种写法。
+            if (part.startsWith("--as=")) {
+                hasAs = true;
+                if (!"--as=bot".equals(part)) {
+                    log.warn("SkillCLI身份参数已修正：原参数={}，新参数=--as=bot，原因=管理员机器人项目不使用user身份", part);
+                    command.set(i, "--as=bot");
+                }
+            }
+        }
+
+        // 如果业务命令没带 --as，就默认补 bot。
+        if (!hasAs) {
+            command.add("--as");
+            command.add("bot");
+            log.info("SkillCLI身份参数已补充：身份=bot，原因=管理员机器人项目默认使用bot身份");
+        }
     }
 
     private CliCommandResult executeCommand(List<String> command) {
