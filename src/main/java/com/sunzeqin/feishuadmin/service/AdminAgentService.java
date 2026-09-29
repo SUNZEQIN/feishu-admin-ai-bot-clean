@@ -75,7 +75,7 @@ public class AdminAgentService {
             openApi.replyText(event.messageId(), result.reply());
         } catch (Exception e) {
             // 捕获后台线程异常，避免异步任务静默失败。
-            log.error("MESSAGE_ASYNC_FAILED messageId={} error={}", event.messageId(), e.getMessage(), e);
+            log.error("消息异步处理失败：消息ID={}，错误={}", event.messageId(), e.getMessage(), e);
         }
     }
 }

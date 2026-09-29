@@ -66,20 +66,20 @@ public class AgentPlannerService {
         String prompt = buildPrompt(userText, chatId, observations);
 
         // 打印规划输入摘要，排查提示词和 observation 数量。
-        log.info("AGENT_PLAN_INPUT messageId={} step={} chatId={} observationCount={} userText={}",
+        log.info("智能体规划输入：消息ID={}，步骤={}，会话ID={}，观察结果数量={}，用户文本={}",
                 messageId, step, chatId, observations.size(), userText);
 
         // 调用模型。
         String answer = chatModel.chat(prompt);
 
         // 打印模型原始输出，方便排查 JSON 格式问题。
-        log.info("AGENT_PLAN_RAW messageId={} step={} answer={}", messageId, step, answer);
+        log.info("智能体模型原始输出：消息ID={}，步骤={}，模型输出={}", messageId, step, answer);
 
         // 解析模型决策。
         AgentDecision decision = parseDecision(answer);
 
         // 打印决策日志，方便排查模型下一步要做什么。
-        log.info("AGENT_DECISION messageId={} step={} type={} tool={} reason={}",
+        log.info("智能体规划结果：消息ID={}，步骤={}，决策类型={}，工具={}，原因={}",
                 messageId,
                 step,
                 decision.type(),
@@ -98,7 +98,7 @@ public class AgentPlannerService {
 
         // 没配置 API Key 时不创建模型。
         if (properties.getLlmApiKey() == null || properties.getLlmApiKey().isBlank()) {
-            log.warn("AGENT_LLM_DISABLED reason=api_key_empty");
+            log.warn("智能体大模型未启用：原因=API Key为空");
             return null;
         }
 

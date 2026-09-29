@@ -53,13 +53,13 @@ public class ToolRegistryService {
 
     public ToolResult execute(ToolCall call) {
         // 打印工具调用入参，方便排查 Agent 到底让系统做了什么。
-        log.info("TOOL_CALL name={} params={}", call.name(), call.params());
+        log.info("工具调用开始：工具名称={}，入参={}", call.name(), call.params());
 
         try {
             // 根据工具名称分发到具体执行方法。
             if ("im.list_chat_members".equals(call.name())) {
                 ToolResult result = listChatMembers(call);
-                log.info("TOOL_CALL_RESULT name={} success={} message={} data={}",
+                log.info("工具调用结果：工具名称={}，是否成功={}，说明={}，数据={}",
                         result.tool(), result.success(), result.message(), result.data());
                 return result;
             }
@@ -67,21 +67,21 @@ public class ToolRegistryService {
             // 根据工具名称分发到创建群聊工具。
             if ("im.create_chat".equals(call.name())) {
                 ToolResult result = createChat(call);
-                log.info("TOOL_CALL_RESULT name={} success={} message={} data={}",
+                log.info("工具调用结果：工具名称={}，是否成功={}，说明={}，数据={}",
                         result.tool(), result.success(), result.message(), result.data());
                 return result;
             }
 
             // 不认识的工具直接失败，防止模型编造工具。
             ToolResult result = ToolResult.failed(call.name(), "未知工具：" + call.name());
-            log.info("TOOL_CALL_RESULT name={} success={} message={} data={}",
+            log.info("工具调用结果：工具名称={}，是否成功={}，说明={}，数据={}",
                     result.tool(), result.success(), result.message(), result.data());
             return result;
         } catch (Exception e) {
             // 工具执行异常时，返回失败结果给 Agent 观察。
-            log.warn("TOOL_CALL_FAILED name={} error={}", call.name(), e.getMessage());
+            log.warn("工具调用异常：工具名称={}，错误={}", call.name(), e.getMessage());
             ToolResult result = ToolResult.failed(call.name(), e.getMessage());
-            log.info("TOOL_CALL_RESULT name={} success={} message={} data={}",
+            log.info("工具调用结果：工具名称={}，是否成功={}，说明={}，数据={}",
                     result.tool(), result.success(), result.message(), result.data());
             return result;
         }
@@ -101,7 +101,7 @@ public class ToolRegistryService {
 
         // 飞书这个接口不支持 app_id；如果 LLM 传错了，这里强制改成 open_id，避免接口 400。
         if ("app_id".equals(memberIdType)) {
-            log.warn("TOOL_PARAM_FIXED tool={} field=memberIdType oldValue=app_id newValue=open_id reason=feishu_api_not_support_app_id",
+            log.warn("工具参数已修正：工具名称={}，字段=memberIdType，原值=app_id，新值=open_id，原因=飞书接口不支持app_id",
                     call.name());
             memberIdType = "open_id";
         }

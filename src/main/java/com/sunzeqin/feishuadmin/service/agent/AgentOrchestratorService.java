@@ -56,13 +56,13 @@ public class AgentOrchestratorService {
 
     public AgentRunResult run(FeishuMessageEvent event) {
         // 打印 Agent 开始执行日志，方便用 messageId 串起整次请求。
-        log.info("AGENT_RUN_START messageId={} chatId={} chatType={} maxSteps={} text={}",
+        log.info("智能体开始执行：消息ID={}，会话ID={}，会话类型={}，最大步骤数={}，用户文本={}",
                 event.messageId(), event.chatId(), event.chatType(), MAX_STEPS, event.text());
 
         // LLM Agent Loop 没启用时，使用本地稳定兜底流程。
         if (!planner.enabled()) {
             // 打印兜底模式日志。
-            log.info("AGENT_RUN_FALLBACK messageId={} reason=planner_disabled", event.messageId());
+            log.info("智能体进入兜底流程：消息ID={}，原因=规划器未启用", event.messageId());
             return fallbackRun(event);
         }
 
@@ -72,14 +72,14 @@ public class AgentOrchestratorService {
         // 最多执行 MAX_STEPS 轮。
         for (int step = 1; step <= MAX_STEPS; step++) {
             // 打印每一轮开始日志。
-            log.info("AGENT_STEP_START messageId={} step={} observationCount={}",
+            log.info("智能体步骤开始：消息ID={}，步骤={}，已有观察结果数量={}",
                     event.messageId(), step, observations.size());
 
             // 让 LLM 基于当前 observations 决定下一步。
             AgentDecision decision = planner.decide(event.messageId(), step, event.text(), event.chatId(), observations);
 
             // 打印当前轮规划结果。
-            log.info("AGENT_STEP_DECISION messageId={} step={} type={} tool={} reason={} finalReply={}",
+            log.info("智能体步骤决策：消息ID={}，步骤={}，决策类型={}，工具={}，原因={}，最终回复={}",
                     event.messageId(),
                     step,
                     decision.type(),
@@ -90,7 +90,7 @@ public class AgentOrchestratorService {
             // 如果 LLM 输出最终回复，就结束循环。
             if (!decision.toolCallDecision()) {
                 // 打印最终回复日志。
-                log.info("AGENT_RUN_FINAL messageId={} step={} reply={}",
+                log.info("智能体最终回复：消息ID={}，步骤={}，回复={}",
                         event.messageId(), step, decision.finalReply());
                 return new AgentRunResult(true, decision.finalReply());
             }
@@ -98,19 +98,19 @@ public class AgentOrchestratorService {
             // 如果 LLM 说要调用工具但没给工具参数，直接结束。
             if (decision.toolCall() == null) {
                 // 打印缺少工具调用日志。
-                log.warn("AGENT_RUN_FAILED messageId={} step={} reason=tool_call_missing", event.messageId(), step);
+                log.warn("智能体执行失败：消息ID={}，步骤={}，原因=缺少工具调用参数", event.messageId(), step);
                 return new AgentRunResult(false, "⚠️ Agent 没有给出可执行工具。");
             }
 
             // 打印工具执行前日志。
-            log.info("AGENT_TOOL_EXECUTE messageId={} step={} tool={} params={}",
+            log.info("智能体准备执行工具：消息ID={}，步骤={}，工具={}，入参={}",
                     event.messageId(), step, decision.toolCall().name(), decision.toolCall().params());
 
             // 执行工具。
             ToolResult result = toolRegistry.execute(decision.toolCall());
 
             // 打印工具执行结果日志。
-            log.info("AGENT_TOOL_RESULT messageId={} step={} tool={} success={} message={} data={}",
+            log.info("智能体工具结果：消息ID={}，步骤={}，工具={}，是否成功={}，说明={}，数据={}",
                     event.messageId(), step, result.tool(), result.success(), result.message(), result.data());
 
             // 保存工具观察结果。
@@ -119,14 +119,14 @@ public class AgentOrchestratorService {
             // 工具失败时结束执行，并把原因回复给用户。
             if (!result.success()) {
                 // 打印工具失败导致 Agent 结束的日志。
-                log.warn("AGENT_RUN_FAILED messageId={} step={} tool={} reason={}",
+                log.warn("智能体执行失败：消息ID={}，步骤={}，工具={}，原因={}",
                         event.messageId(), step, result.tool(), result.message());
                 return new AgentRunResult(false, "⚠️ 执行失败\n\n🔎 原因：" + result.message());
             }
         }
 
         // 超过最大步数仍未结束，返回保护性提示。
-        log.warn("AGENT_RUN_STOPPED messageId={} reason=max_steps_exceeded maxSteps={}",
+        log.warn("智能体强制停止：消息ID={}，原因=超过最大步骤数，最大步骤数={}",
                 event.messageId(), MAX_STEPS);
         return new AgentRunResult(false, "⚠️ 本次任务步骤过多，已停止执行，避免重复操作。");
     }
@@ -185,7 +185,7 @@ public class AgentOrchestratorService {
                     + "🤖 机器人：" + bots.size() + " 个" + names(bots));
         } catch (Exception e) {
             // 兜底流程异常时返回失败回复。
-            log.warn("AGENT_FALLBACK_FAILED messageId={} error={}", event.messageId(), e.getMessage());
+            log.warn("智能体兜底流程失败：消息ID={}，错误={}", event.messageId(), e.getMessage());
             return new AgentRunResult(false, "⚠️ 没有完成处理\n\n🔎 失败原因：" + e.getMessage());
         }
     }

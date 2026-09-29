@@ -72,7 +72,7 @@ public class FeishuEventController {
         if (event != null) {
             // 同一个 message_id 如果已经处理过，直接忽略，避免重复回复。
             if (!dedupService.firstSeen(event.messageId())) {
-                log.info("FEISHU_EVENT_DUPLICATED messageId={}", event.messageId());
+                log.info("飞书事件重复推送已忽略：消息ID={}", event.messageId());
                 return ResponseEntity.ok(Map.of("ok", true, "duplicated", true));
             }
 
@@ -81,7 +81,7 @@ public class FeishuEventController {
         } else {
             // 如果不是当前系统关心的事件，只记录日志，不抛异常，避免飞书反复重试。
             String eventType = root.path("header").path("event_type").asText("");
-            log.info("FEISHU_EVENT_IGNORED type={}", eventType);
+            log.info("飞书事件已忽略：事件类型={}", eventType);
         }
 
         // 飞书事件回调需要快速返回成功，具体业务在服务里处理。
