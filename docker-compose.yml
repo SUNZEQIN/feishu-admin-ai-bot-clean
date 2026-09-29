@@ -1,0 +1,11 @@
+services:
+  feishu-admin-ai-bot-clean:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: feishu-admin-ai-bot-clean
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${SERVER_PORT:-8082}:${SERVER_PORT:-8082}"
