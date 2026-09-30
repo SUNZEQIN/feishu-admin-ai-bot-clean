@@ -136,6 +136,16 @@ public class AgentOrchestratorService {
             // 保存工具观察结果。
             observations.add(result);
 
+            // 如果工具已经返回授权链接，直接回复用户，不再交给大模型二次解释，避免误说“不支持授权”。
+            String authorizeReply = authorizeReplyFromToolResult(result);
+            if (!authorizeReply.isBlank()) {
+                log.info("[阶段4 工具调用] 授权链接已生成，直接结束流程：消息ID={}，步骤={}，工具={}",
+                        event.messageId(), step, result.tool());
+                AgentRunResult runResult = new AgentRunResult(true, authorizeReply);
+                memoryService.saveAssistantMessage(event, runResult.reply());
+                return runResult;
+            }
+
             // 工具失败时结束执行，并把原因回复给用户。
             if (!result.success()) {
                 // 打印工具失败导致 Agent 结束的日志。
@@ -153,6 +163,32 @@ public class AgentOrchestratorService {
         AgentRunResult result = new AgentRunResult(false, "⚠️ 本次任务步骤过多，已停止执行，避免重复操作。");
         memoryService.saveAssistantMessage(event, result.reply());
         return result;
+    }
+
+    private String authorizeReplyFromToolResult(ToolResult result) {
+        // 空结果直接返回空字符串。
+        if (result == null || result.data() == null || result.data().isEmpty()) {
+            return "";
+        }
+
+        // 只有真正包含授权链接时，才直接返回。
+        Object authorizeUrl = result.data().get("authorizeUrl");
+        if (authorizeUrl == null || authorizeUrl.toString().isBlank()) {
+            return "";
+        }
+
+        // 优先使用工具已经整理好的用户回复。
+        Object finalReply = result.data().get("finalReply");
+        if (finalReply != null && !finalReply.toString().isBlank()) {
+            return finalReply.toString();
+        }
+
+        // 没有 finalReply 时组装兜底回复。
+        Object requiredScopes = result.data().get("requiredScopes");
+        return "需要你授权后才能继续执行。\n\n"
+                + "授权域：" + (requiredScopes == null ? "" : requiredScopes) + "\n"
+                + "授权链接：" + authorizeUrl + "\n\n"
+                + "授权完成后，系统会保存到用户表并定时刷新 token。";
     }
 
     private ToolCall enrichToolCall(FeishuMessageEvent event, ToolCall toolCall) {

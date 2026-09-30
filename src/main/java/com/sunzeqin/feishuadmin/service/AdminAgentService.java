@@ -33,14 +33,19 @@ public class AdminAgentService {
     // Agent 编排服务，负责 plan -> tool -> observe -> plan 的循环。
     private final AgentOrchestratorService orchestrator;
 
+    // 用户 OAuth 授权服务，用来生成用户授权链接。
+    private final UserOAuthTokenService userOAuthTokenService;
+
     public AdminAgentService(FeishuProperties properties, FeishuOpenApiService openApi,
-            AgentOrchestratorService orchestrator) {
+            AgentOrchestratorService orchestrator, UserOAuthTokenService userOAuthTokenService) {
         // 保存配置对象。
         this.properties = properties;
         // 保存 OpenAPI 服务。
         this.openApi = openApi;
         // 保存 Agent 编排器。
         this.orchestrator = orchestrator;
+        // 保存用户授权服务。
+        this.userOAuthTokenService = userOAuthTokenService;
     }
 
     /**
@@ -73,6 +78,12 @@ public class AdminAgentService {
             } else {
                 log.info("[阶段2 回复处理中] 处理中表情跳过：消息ID={}，原因=FEISHU_PROCESSING_REPLY_ENABLED=false",
                         event.messageId());
+            }
+
+            // 用户主动要求授权链接时，直接生成 OAuth 链接，不进入 LLM，避免模型误判为“不支持授权”。
+            if (authorizationQuestion(event.text())) {
+                safeReplyToSender(event, authorizationReply(event));
+                return;
             }
 
             // 交给 Agent 编排器执行多步循环。
@@ -213,6 +224,37 @@ public class AdminAgentService {
                 || normalizedText.contains("怎么用")
                 || normalizedText.equals("help")
                 || normalizedText.equals("帮助");
+    }
+
+    private boolean authorizationQuestion(String text) {
+        // 空消息不属于授权请求。
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+
+        // 去掉机器人 @ 占位符，避免影响关键词判断。
+        String normalizedText = text.replaceAll("@_user_\\d+", "").trim();
+
+        // 用户明确要授权链接时命中。
+        return normalizedText.contains("授权链接")
+                || normalizedText.contains("提供链接给我授权")
+                || normalizedText.contains("给我授权")
+                || normalizedText.contains("重新授权")
+                || normalizedText.contains("发起授权");
+    }
+
+    private String authorizationReply(FeishuMessageEvent event) {
+        // 使用配置里的默认 scope。生产环境建议把常用用户权限都配置进 FEISHU_OAUTH_DEFAULT_SCOPES。
+        String scopeText = properties.getOauthDefaultScopes();
+
+        // 生成 OAuth 链接。这个链路由 Java 服务保存 token，不依赖 lark-cli 交互式登录。
+        String authorizeUrl = userOAuthTokenService.createAuthorizeUrl(event, scopeText);
+
+        // 返回授权说明。
+        return "需要你授权后才能以用户身份执行。\n\n"
+                + "授权域：" + scopeText + "\n"
+                + "授权链接：" + authorizeUrl + "\n\n"
+                + "授权完成后，系统会保存到用户表并定时刷新 token。";
     }
 
     private String helpReply() {
