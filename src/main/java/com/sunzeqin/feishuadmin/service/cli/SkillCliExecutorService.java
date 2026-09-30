@@ -219,6 +219,7 @@ public class SkillCliExecutorService {
                 12. 不要因为当前业务域是 docs、vc、calendar、base 就拒绝执行 im/contact 等辅助命令，只要命令业务域在白名单内即可。
                 13. 如果要调用其它业务域，但还不知道命令用法，先执行该业务域的 --help 或 schema 查询。
                 14. 本项目是管理员机器人项目，所有 lark-cli 业务命令必须使用 --as bot，不要使用 --as user。
+                15. lark-cli skills read 是只读资料查询命令，可以用来读取内置技能说明，但它不是业务执行结果。
 
                 业务域：%s
                 允许切换的业务域：%s
@@ -639,8 +640,8 @@ public class SkillCliExecutorService {
             return;
         }
 
-        // schema 是只读查询命令结构，允许执行。
-        if ("schema".equals(commandDomain)) {
+        // schema/skills 是只读元命令，用来查询命令结构和内置技能说明，允许执行。
+        if ("schema".equals(commandDomain) || "skills".equals(commandDomain)) {
             return;
         }
 
