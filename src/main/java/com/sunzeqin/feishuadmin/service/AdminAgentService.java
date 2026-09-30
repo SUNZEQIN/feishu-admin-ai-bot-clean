@@ -36,8 +36,12 @@ public class AdminAgentService {
     // 用户 OAuth 授权服务，用来生成用户授权链接。
     private final UserOAuthTokenService userOAuthTokenService;
 
+    // 用户身份 scope 映射服务，用来按用户提到的模块生成授权 scope。
+    private final FeishuUserScopeMappingService scopeMappingService;
+
     public AdminAgentService(FeishuProperties properties, FeishuOpenApiService openApi,
-            AgentOrchestratorService orchestrator, UserOAuthTokenService userOAuthTokenService) {
+            AgentOrchestratorService orchestrator, UserOAuthTokenService userOAuthTokenService,
+            FeishuUserScopeMappingService scopeMappingService) {
         // 保存配置对象。
         this.properties = properties;
         // 保存 OpenAPI 服务。
@@ -46,6 +50,8 @@ public class AdminAgentService {
         this.orchestrator = orchestrator;
         // 保存用户授权服务。
         this.userOAuthTokenService = userOAuthTokenService;
+        // 保存用户身份 scope 映射服务。
+        this.scopeMappingService = scopeMappingService;
     }
 
     /**
@@ -244,8 +250,17 @@ public class AdminAgentService {
     }
 
     private String authorizationReply(FeishuMessageEvent event) {
-        // 使用配置里的默认 scope。生产环境建议把常用用户权限都配置进 FEISHU_OAUTH_DEFAULT_SCOPES。
-        String scopeText = properties.getOauthDefaultScopes();
+        // 根据用户话术判断授权模块，例如日程、消息、文档、多维表格。
+        String domain = detectAuthorizationDomain(event.text());
+
+        // 命中模块时使用 scope 映射表，未命中时使用配置里的默认 scope。
+        String scopeText = domain.isBlank()
+                ? properties.getOauthDefaultScopes()
+                : scopeMappingService.scopeTextForDomain(domain);
+
+        // 打印授权入口的 scope 来源。
+        log.info("[阶段4 工具调用] 主动授权链接scope选择：消息ID={}，业务域={}，scope={}",
+                event.messageId(), domain.isBlank() ? "默认配置" : domain, scopeText);
 
         // 生成 OAuth 链接。这个链路由 Java 服务保存 token，不依赖 lark-cli 交互式登录。
         String authorizeUrl = userOAuthTokenService.createAuthorizeUrl(event, scopeText);
@@ -255,6 +270,77 @@ public class AdminAgentService {
                 + "授权域：" + scopeText + "\n"
                 + "授权链接：" + authorizeUrl + "\n\n"
                 + "授权完成后，系统会保存到用户表并定时刷新 token。";
+    }
+
+    private String detectAuthorizationDomain(String text) {
+        // 空文本无法判断业务域。
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+
+        // 统一转小写并去掉机器人 @ 占位符。
+        String normalizedText = text.replaceAll("@_user_\\d+", "").toLowerCase(Locale.ROOT);
+
+        // 多维表格相关权限。
+        if (normalizedText.contains("多维表格") || normalizedText.contains("数据表")
+                || normalizedText.contains("base") || normalizedText.contains("bitable")) {
+            return "base";
+        }
+
+        // 文档相关权限。
+        if (normalizedText.contains("文档") || normalizedText.contains("云文档")
+                || normalizedText.contains("doc") || normalizedText.contains("docs")) {
+            return "docs";
+        }
+
+        // 视频会议相关权限。
+        if (normalizedText.contains("视频会议") || normalizedText.contains("飞书会议")
+                || normalizedText.contains("vc")) {
+            return "vc";
+        }
+
+        // 日程相关权限。
+        if (normalizedText.contains("日程") || normalizedText.contains("日历")
+                || normalizedText.contains("会议") || normalizedText.contains("参会")) {
+            return "calendar";
+        }
+
+        // 消息和群聊相关权限。
+        if (normalizedText.contains("消息") || normalizedText.contains("群聊")
+                || normalizedText.contains("群成员") || normalizedText.contains("私聊")
+                || normalizedText.contains("发给") || normalizedText.contains("发送")) {
+            return "im";
+        }
+
+        // 通讯录相关权限。
+        if (normalizedText.contains("通讯录") || normalizedText.contains("用户")
+                || normalizedText.contains("人员") || normalizedText.contains("姓名")
+                || normalizedText.contains("open_id") || normalizedText.contains("user_id")) {
+            return "contact";
+        }
+
+        // 审批相关权限。
+        if (normalizedText.contains("审批")) {
+            return "approval";
+        }
+
+        // 云盘相关权限。
+        if (normalizedText.contains("云盘") || normalizedText.contains("文件")) {
+            return "drive";
+        }
+
+        // 知识库相关权限。
+        if (normalizedText.contains("知识库") || normalizedText.contains("wiki")) {
+            return "wiki";
+        }
+
+        // 妙记相关权限。
+        if (normalizedText.contains("妙记") || normalizedText.contains("minutes")) {
+            return "minutes";
+        }
+
+        // 未识别时让默认配置兜底。
+        return "";
     }
 
     private String helpReply() {

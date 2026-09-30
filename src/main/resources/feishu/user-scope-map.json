@@ -1,0 +1,3712 @@
+{
+  "identity": "user",
+  "generatedFrom": "D:\\Program Files (x86)\\Notepad++\\feishu.txt",
+  "generatedAt": "2026-09-30 22:42:10",
+  "offlineAccessScope": "offline_access",
+  "domains": {
+    "acs": [
+      {
+        "scope": "acs:device:write",
+        "description": "写入门禁机设备信息",
+        "level": 2
+      },
+      {
+        "scope": "acs:devices:readonly",
+        "description": "查看智能门禁设备列表",
+        "level": 2
+      },
+      {
+        "scope": "acs:users",
+        "description": "查看、更新智能门禁用户",
+        "level": 2
+      }
+    ],
+    "admin": [
+      {
+        "scope": "admin:app.category:update",
+        "description": "更新应用分组",
+        "level": 2
+      },
+      {
+        "scope": "admin:app.info:readonly",
+        "description": "获取企业内全部应用的信息",
+        "level": 2
+      }
+    ],
+    "aily": [
+      {
+        "scope": "aily:agent_artifact:read",
+        "description": "智能体产物下载",
+        "level": 2
+      },
+      {
+        "scope": "aily:agent_attachment:write",
+        "description": "上传文件",
+        "level": 1
+      },
+      {
+        "scope": "aily:agent_chat:read",
+        "description": "获取团队智能体的对话内容",
+        "level": 2
+      },
+      {
+        "scope": "aily:agent_chat:write",
+        "description": "发起对话与管理会话",
+        "level": 1
+      },
+      {
+        "scope": "aily:agent_visibility:read",
+        "description": "获取智能体可见性",
+        "level": 1
+      },
+      {
+        "scope": "aily:data_asset:read",
+        "description": "获取智能伙伴创建平台数据知识资产",
+        "level": 1
+      },
+      {
+        "scope": "aily:data_asset:upload_file",
+        "description": "上传数据知识文件",
+        "level": 1
+      },
+      {
+        "scope": "aily:data_asset:write",
+        "description": "创建、更新、删除智能伙伴创建平台数据知识资产",
+        "level": 1
+      },
+      {
+        "scope": "aily:file:read",
+        "description": "获取文件",
+        "level": 2
+      },
+      {
+        "scope": "aily:file:write",
+        "description": "上传文件",
+        "level": 2
+      },
+      {
+        "scope": "aily:intent:read",
+        "description": "获取意图信息（历史版本）",
+        "level": 1
+      },
+      {
+        "scope": "aily:intent:write",
+        "description": "读写意图信息（历史版本）",
+        "level": 1
+      },
+      {
+        "scope": "aily:knowledge:ask",
+        "description": "执行智能伙伴数据知识问答",
+        "level": 2
+      },
+      {
+        "scope": "aily:knowledge:read",
+        "description": "读取智能伙伴知识库",
+        "level": 2
+      },
+      {
+        "scope": "aily:knowledge:write",
+        "description": "写入智能伙伴知识",
+        "level": 2
+      },
+      {
+        "scope": "aily:message:read",
+        "description": "获取 aily 消息",
+        "level": 2
+      },
+      {
+        "scope": "aily:message:write",
+        "description": "发送 aily 消息",
+        "level": 2
+      },
+      {
+        "scope": "aily:run:read",
+        "description": "获取运行信息",
+        "level": 1
+      },
+      {
+        "scope": "aily:run:write",
+        "description": "创建运行",
+        "level": 1
+      },
+      {
+        "scope": "aily:session:read",
+        "description": "获取会话信息",
+        "level": 2
+      },
+      {
+        "scope": "aily:session:write",
+        "description": "读写会话信息",
+        "level": 2
+      },
+      {
+        "scope": "aily:skill:read",
+        "description": "获取技能信息",
+        "level": 1
+      },
+      {
+        "scope": "aily:skill:write",
+        "description": "运行技能",
+        "level": 1
+      },
+      {
+        "scope": "aily:stats:read",
+        "description": "查看管理后台统计数据",
+        "level": 2
+      }
+    ],
+    "app_engine": [
+      {
+        "scope": "app_engine:application.event_subscriber:read",
+        "description": "获取事件订阅器",
+        "level": 2
+      },
+      {
+        "scope": "app_engine:apps:read",
+        "description": "查询应用基本信息",
+        "level": 2
+      },
+      {
+        "scope": "app_engine:seat_activities:read",
+        "description": "查询席位活跃详情",
+        "level": 1
+      },
+      {
+        "scope": "app_engine:seat_assignments:read",
+        "description": "查询席位分配详情",
+        "level": 2
+      },
+      {
+        "scope": "app_engine:security.audit_log:read",
+        "description": "获取飞书 aPaaS 审计日志信息",
+        "level": 2
+      },
+      {
+        "scope": "app_engine:tenant_app_metrics:read",
+        "description": "获取应用运营数据",
+        "level": 2
+      },
+      {
+        "scope": "app_engine:workspace.sql_commands:write",
+        "description": "在工作空间下执行 SQL 语句",
+        "level": 2
+      },
+      {
+        "scope": "app_engine:workspace.table:read",
+        "description": "读取工作空间及数据表信息",
+        "level": 2
+      },
+      {
+        "scope": "app_engine:workspace.table:write",
+        "description": "修改工作空间及数据表信息",
+        "level": 2
+      },
+      {
+        "scope": "app_engine:workspace.table.record:read",
+        "description": "读取数据表记录",
+        "level": 2
+      },
+      {
+        "scope": "app_engine:workspace.table.record:write",
+        "description": "修改或删除数据表记录",
+        "level": 2
+      }
+    ],
+    "application": [
+      {
+        "scope": "application:app_slash_command:read",
+        "description": "查询 Slash Command",
+        "level": 1
+      },
+      {
+        "scope": "application:app_slash_command:write",
+        "description": "编辑 Slash Command",
+        "level": 1
+      },
+      {
+        "scope": "application:application:patch",
+        "description": "修改应用信息",
+        "level": 2
+      },
+      {
+        "scope": "application:application.collaborators:write",
+        "description": "更新应用协作者信息",
+        "level": 2
+      },
+      {
+        "scope": "application:bot.basic_info:read",
+        "description": "获取机器人的基本信息",
+        "level": 2
+      }
+    ],
+    "approval": [
+      {
+        "scope": "approval:approval",
+        "description": "查看、创建、更新、删除审批应用相关信息",
+        "level": 2
+      },
+      {
+        "scope": "approval:approval:read",
+        "description": "获取审批定义详情",
+        "level": 2
+      },
+      {
+        "scope": "approval:approval:readonly",
+        "description": "访问审批应用",
+        "level": 2
+      },
+      {
+        "scope": "approval:definition",
+        "description": "查看、创建、更新、删除原生审批定义相关信息",
+        "level": 2
+      },
+      {
+        "scope": "approval:instance:read",
+        "description": "获取审批实例详情",
+        "level": 2
+      },
+      {
+        "scope": "approval:instance:write",
+        "description": "操作审批实例",
+        "level": 2
+      },
+      {
+        "scope": "approval:task:read",
+        "description": "获取任务基本信息",
+        "level": 2
+      },
+      {
+        "scope": "approval:task:write",
+        "description": "处理审批任务",
+        "level": 2
+      }
+    ],
+    "attendance_machine": [
+      {
+        "scope": "attendance_machine:device:write",
+        "description": "写入考勤机设备信息",
+        "level": 2
+      }
+    ],
+    "attendance": [
+      {
+        "scope": "attendance:overtime_approval:write",
+        "description": "提交加班审批",
+        "level": 2
+      },
+      {
+        "scope": "attendance:rule:readonly",
+        "description": "导出打卡管理规则",
+        "level": 2
+      },
+      {
+        "scope": "attendance:task",
+        "description": "写入打卡数据",
+        "level": 2
+      },
+      {
+        "scope": "attendance:task:readonly",
+        "description": "导出打卡数据",
+        "level": 2
+      }
+    ],
+    "audio_video_ai": [
+      {
+        "scope": "audio_video_ai:meeting_assistance",
+        "description": "分析会议内容",
+        "level": 1
+      }
+    ],
+    "baike": [
+      {
+        "scope": "baike:entity",
+        "description": "查看、创建、编辑、删除词典词条",
+        "level": 2
+      },
+      {
+        "scope": "baike:entity:exempt_review",
+        "description": "创建、更新词典免审词条",
+        "level": 2
+      },
+      {
+        "scope": "baike:entity:readonly",
+        "description": "查看词典词条",
+        "level": 2
+      }
+    ],
+    "base": [
+      {
+        "scope": "base:agent:execute",
+        "description": "多维表格智能体操作",
+        "level": 2
+      },
+      {
+        "scope": "base:app:copy",
+        "description": "复制多维表格",
+        "level": 2
+      },
+      {
+        "scope": "base:app:create",
+        "description": "创建多维表格",
+        "level": 2
+      },
+      {
+        "scope": "base:app:read",
+        "description": "获取多维表格信息",
+        "level": 2
+      },
+      {
+        "scope": "base:app:update",
+        "description": "更新多维表格",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode_block:create",
+        "description": "新建多维表格应用组件",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode_block:delete",
+        "description": "删除多维表格应用组件",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode_block:read",
+        "description": "查看多维表格应用组件",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode_block:update",
+        "description": "更新多维表格应用组件",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode_page:create",
+        "description": "新建多维表格应用页面",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode_page:delete",
+        "description": "删除多维表格应用页面",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode_page:read",
+        "description": "查看多维表格应用页面",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode_page:update",
+        "description": "更新多维表格应用页面",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode:create",
+        "description": "新建多维表格应用",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode:read",
+        "description": "查看多维表格应用",
+        "level": 2
+      },
+      {
+        "scope": "base:appmode:update",
+        "description": "更新多维表格应用",
+        "level": 2
+      },
+      {
+        "scope": "base:block:create",
+        "description": "创建多维表格组件",
+        "level": 1
+      },
+      {
+        "scope": "base:block:delete",
+        "description": "删除多维表格组件",
+        "level": 1
+      },
+      {
+        "scope": "base:block:read",
+        "description": "读取多维表格组件",
+        "level": 1
+      },
+      {
+        "scope": "base:block:update",
+        "description": "更新多维表格组件",
+        "level": 1
+      },
+      {
+        "scope": "base:collaborator:create",
+        "description": "新增协作者",
+        "level": 2
+      },
+      {
+        "scope": "base:collaborator:delete",
+        "description": "删除协作者",
+        "level": 2
+      },
+      {
+        "scope": "base:collaborator:read",
+        "description": "列出协作者",
+        "level": 2
+      },
+      {
+        "scope": "base:dashboard:copy",
+        "description": "复制仪表盘",
+        "level": 2
+      },
+      {
+        "scope": "base:dashboard:create",
+        "description": "创建仪表盘",
+        "level": 2
+      },
+      {
+        "scope": "base:dashboard:delete",
+        "description": "删除仪表盘",
+        "level": 2
+      },
+      {
+        "scope": "base:dashboard:read",
+        "description": "获取仪表盘信息",
+        "level": 2
+      },
+      {
+        "scope": "base:dashboard:update",
+        "description": "更新仪表盘",
+        "level": 2
+      },
+      {
+        "scope": "base:event:read",
+        "description": "读取多维表格事件体",
+        "level": 1
+      },
+      {
+        "scope": "base:field_group:create",
+        "description": "创建字段编组",
+        "level": 2
+      },
+      {
+        "scope": "base:field:create",
+        "description": "新增字段",
+        "level": 2
+      },
+      {
+        "scope": "base:field:delete",
+        "description": "删除字段",
+        "level": 2
+      },
+      {
+        "scope": "base:field:read",
+        "description": "获取字段信息",
+        "level": 2
+      },
+      {
+        "scope": "base:field:update",
+        "description": "更新字段",
+        "level": 2
+      },
+      {
+        "scope": "base:form:create",
+        "description": "创建表单问卷",
+        "level": 2
+      },
+      {
+        "scope": "base:form:delete",
+        "description": "删除表单问卷",
+        "level": 2
+      },
+      {
+        "scope": "base:form:read",
+        "description": "获取表单数据",
+        "level": 2
+      },
+      {
+        "scope": "base:form:update",
+        "description": "更新表单数据",
+        "level": 2
+      },
+      {
+        "scope": "base:history:read",
+        "description": "读取多维表格历史记录",
+        "level": 2
+      },
+      {
+        "scope": "base:record:create",
+        "description": "新增记录",
+        "level": 2
+      },
+      {
+        "scope": "base:record:delete",
+        "description": "删除记录",
+        "level": 2
+      },
+      {
+        "scope": "base:record:read",
+        "description": "检索特定记录",
+        "level": 2
+      },
+      {
+        "scope": "base:record:retrieve",
+        "description": "根据条件搜索记录",
+        "level": 2
+      },
+      {
+        "scope": "base:record:update",
+        "description": "更新记录",
+        "level": 2
+      },
+      {
+        "scope": "base:role:create",
+        "description": "新增自定义角色",
+        "level": 2
+      },
+      {
+        "scope": "base:role:delete",
+        "description": "删除自定义角色",
+        "level": 2
+      },
+      {
+        "scope": "base:role:read",
+        "description": "查询自定义角色",
+        "level": 2
+      },
+      {
+        "scope": "base:role:update",
+        "description": "更新自定义角色",
+        "level": 2
+      },
+      {
+        "scope": "base:site:access",
+        "description": "接入，验证 Base Site 资源",
+        "level": 1
+      },
+      {
+        "scope": "base:site:create",
+        "description": "创建Base site资源",
+        "level": 1
+      },
+      {
+        "scope": "base:site:delete",
+        "description": "删除 Base Site 资源",
+        "level": 1
+      },
+      {
+        "scope": "base:site:read",
+        "description": "AI friendly Base Site Openapi 资源读取",
+        "level": 2
+      },
+      {
+        "scope": "base:site:update",
+        "description": "更新 Base Site 资源",
+        "level": 1
+      },
+      {
+        "scope": "base:table:create",
+        "description": "新增数据表",
+        "level": 2
+      },
+      {
+        "scope": "base:table:delete",
+        "description": "删除数据表",
+        "level": 2
+      },
+      {
+        "scope": "base:table:read",
+        "description": "获取数据表信息",
+        "level": 2
+      },
+      {
+        "scope": "base:table:update",
+        "description": "更新数据表",
+        "level": 2
+      },
+      {
+        "scope": "base:template:read",
+        "description": "读取多维表格模板",
+        "level": 1
+      },
+      {
+        "scope": "base:view:read",
+        "description": "检索视图",
+        "level": 2
+      },
+      {
+        "scope": "base:view:write_only",
+        "description": "新增、更新、删除视图",
+        "level": 2
+      },
+      {
+        "scope": "base:workflow:create",
+        "description": "创建自动化流程/工作流",
+        "level": 2
+      },
+      {
+        "scope": "base:workflow:delete",
+        "description": "删除自动化流程/工作流",
+        "level": 2
+      },
+      {
+        "scope": "base:workflow:read",
+        "description": "查看自动化流程/工作流",
+        "level": 2
+      },
+      {
+        "scope": "base:workflow:update",
+        "description": "更新自动化流程/工作流",
+        "level": 2
+      },
+      {
+        "scope": "base:workflow:write",
+        "description": "更新自动化流程/工作流状态",
+        "level": 2
+      },
+      {
+        "scope": "base:workspace:create",
+        "description": "新建多维表格空间",
+        "level": 2
+      },
+      {
+        "scope": "base:workspace:list",
+        "description": "列出多维表格空间",
+        "level": 2
+      },
+      {
+        "scope": "base:workspace:read",
+        "description": "查看多维表格空间",
+        "level": 2
+      },
+      {
+        "scope": "base:workspace:update",
+        "description": "更新多维表格空间",
+        "level": 2
+      },
+      {
+        "scope": "bitable:app",
+        "description": "查看、评论、编辑和管理多维表格",
+        "level": 2
+      },
+      {
+        "scope": "bitable:app:readonly",
+        "description": "查看、评论和导出多维表格",
+        "level": 2
+      }
+    ],
+    "whiteboard": [
+      {
+        "scope": "board:whiteboard:node:create",
+        "description": "创建画板节点",
+        "level": 2
+      },
+      {
+        "scope": "board:whiteboard:node:delete",
+        "description": "删除画板节点",
+        "level": 2
+      },
+      {
+        "scope": "board:whiteboard:node:read",
+        "description": "查看画板节点",
+        "level": 2
+      },
+      {
+        "scope": "board:whiteboard:node:update",
+        "description": "更新画板节点",
+        "level": 2
+      }
+    ],
+    "calendar": [
+      {
+        "scope": "calendar:calendar",
+        "description": "更新日历及日程信息",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar:create",
+        "description": "创建日历",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar:delete",
+        "description": "删除日历",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar:read",
+        "description": "读取日历信息",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar:readonly",
+        "description": "获取日历、日程及忙闲信息",
+        "level": 1
+      },
+      {
+        "scope": "calendar:calendar:subscribe",
+        "description": "订阅、退订日历",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar:update",
+        "description": "更新日历",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.acl:create",
+        "description": "新增日历访问控制权限",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.acl:delete",
+        "description": "删除日历访问控制权限",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.acl:read",
+        "description": "读取日历访问控制权限",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.event:create",
+        "description": "创建日程",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.event:delete",
+        "description": "删除日程",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.event:join",
+        "description": "加入日程",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.event:read",
+        "description": "读取日程信息",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.event:reply",
+        "description": "回复日程",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.event:transfer",
+        "description": "转让日程",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.event:update",
+        "description": "更新日程",
+        "level": 2
+      },
+      {
+        "scope": "calendar:calendar.free_busy:read",
+        "description": "读取日历忙闲信息",
+        "level": 2
+      },
+      {
+        "scope": "calendar:exchange.bindings:create",
+        "description": "创建 Exchange 绑定关系",
+        "level": 2
+      },
+      {
+        "scope": "calendar:exchange.bindings:delete",
+        "description": "删除 Exchange 绑定关系",
+        "level": 2
+      },
+      {
+        "scope": "calendar:exchange.bindings:read",
+        "description": "读取 Exchange 绑定关系",
+        "level": 2
+      },
+      {
+        "scope": "calendar:room:readonly",
+        "description": "获取会议室信息",
+        "level": 2
+      },
+      {
+        "scope": "calendar:settings.caldav:create",
+        "description": "生成 CalDAV 配置信息",
+        "level": 2
+      },
+      {
+        "scope": "calendar:settings.workhour:read",
+        "description": "读取 WorkHour 配置",
+        "level": 2
+      },
+      {
+        "scope": "calendar:time_off:create",
+        "description": "创建请假日程",
+        "level": 2
+      },
+      {
+        "scope": "calendar:time_off:delete",
+        "description": "删除请假日程",
+        "level": 2
+      }
+    ],
+    "cardkit": [
+      {
+        "scope": "cardkit:card:read",
+        "description": "获取卡片信息",
+        "level": 1
+      },
+      {
+        "scope": "cardkit:card:write",
+        "description": "创建与更新卡片",
+        "level": 1
+      },
+      {
+        "scope": "cardkit:template:read",
+        "description": "获取卡片模板信息",
+        "level": 1
+      }
+    ],
+    "collab_plugins": [
+      {
+        "scope": "collab_plugins:collab_plugins",
+        "description": "激活、关闭协作插件",
+        "level": 1
+      },
+      {
+        "scope": "collab_plugins:collab_plugins.relation.change:read",
+        "description": "获取协作插件关联关系变化",
+        "level": 1
+      }
+    ],
+    "comment_sdk": [
+      {
+        "scope": "comment_sdk:comment_sdk",
+        "description": "使用评论组件查看、编辑评论",
+        "level": 2
+      }
+    ],
+    "component": [
+      {
+        "scope": "component:selector",
+        "description": "搜索飞书内的数据",
+        "level": 2
+      },
+      {
+        "scope": "component:user_profile",
+        "description": "获取成员名片信息",
+        "level": 2
+      }
+    ],
+    "contact": [
+      {
+        "scope": "contact:contact",
+        "description": "更新通讯录",
+        "level": 2
+      },
+      {
+        "scope": "contact:contact.base:readonly",
+        "description": "获取通讯录基本信息",
+        "level": 1
+      },
+      {
+        "scope": "contact:department.base:readonly",
+        "description": "获取部门基础信息",
+        "level": 1
+      },
+      {
+        "scope": "contact:department.hrbp:readonly",
+        "description": "查询部门 HRBP 信息",
+        "level": 2
+      },
+      {
+        "scope": "contact:department.organize:readonly",
+        "description": "获取通讯录部门组织架构信息",
+        "level": 2
+      },
+      {
+        "scope": "contact:job_title:readonly",
+        "description": "获取职务列表",
+        "level": 2
+      },
+      {
+        "scope": "contact:user:search",
+        "description": "搜索用户",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.assign_info:read",
+        "description": "查询用户席位信息",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.base:readonly",
+        "description": "获取用户基本信息",
+        "level": 1
+      },
+      {
+        "scope": "contact:user.basic_profile:readonly",
+        "description": "获取用户的基本信息",
+        "level": 1
+      },
+      {
+        "scope": "contact:user.department_path:readonly",
+        "description": "获取成员所在部门路径",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.department:readonly",
+        "description": "获取用户组织架构信息",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.dotted_line_leader_info.read",
+        "description": "查看成员的虚线上级 ID",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.email:readonly",
+        "description": "获取用户邮箱信息",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.employee_id:readonly",
+        "description": "获取用户 user ID",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.employee_number:read",
+        "description": "查看成员工号",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.employee:readonly",
+        "description": "获取用户受雇信息",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.gender:readonly",
+        "description": "获取用户性别",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.id:readonly",
+        "description": "通过手机号或邮箱获取用户 ID",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.job_family:readonly",
+        "description": "查询用户所属的工作序列",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.job_level:readonly",
+        "description": "查询用户职级",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.phone:readonly",
+        "description": "获取用户手机号",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.subscription_ids:write",
+        "description": "分配用户席位",
+        "level": 2
+      },
+      {
+        "scope": "contact:user.user_geo",
+        "description": "查看成员数据驻留地",
+        "level": 2
+      },
+      {
+        "scope": "contact:work_city:readonly",
+        "description": "获取工作城市列表",
+        "level": 2
+      },
+      {
+        "scope": "directory:custom_field:write",
+        "description": "创建、更新、删除自定义字段",
+        "level": 2
+      },
+      {
+        "scope": "directory:department:list",
+        "description": "调用 API 获取部门列表",
+        "level": 2
+      },
+      {
+        "scope": "directory:department:read",
+        "description": "调用 API 获取部门信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:department:search",
+        "description": "搜索部门",
+        "level": 2
+      },
+      {
+        "scope": "directory:department:write",
+        "description": "创建、更新、删除部门",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.base:read",
+        "description": "查看部门基础信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.count:read",
+        "description": "查看部门成员与子部门计数",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.create:write",
+        "description": "创建部门",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.custom_field:read",
+        "description": "查看部门自定义字段信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.data_source:read",
+        "description": "查看部门数据来源",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.delete:write",
+        "description": "删除部门",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.department_path:read",
+        "description": "查看部门路径信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.external_id:read",
+        "description": "查看部门自定义 ID",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.has_child:read",
+        "description": "查看部门是否有子部门",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.idconvert:read",
+        "description": "获取部门 ID 转换信息",
+        "level": 1
+      },
+      {
+        "scope": "directory:department.leader:read",
+        "description": "查看部门负责人信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.name:read",
+        "description": "查看部门的名称",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.order_weight:read",
+        "description": "查看部门排序权重",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.organization:read",
+        "description": "查看部门组织架构信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.parent_id:read",
+        "description": "查看部门的父部门 ID",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.status:read",
+        "description": "查看部门的停启用状态",
+        "level": 2
+      },
+      {
+        "scope": "directory:department.update:write",
+        "description": "更新部门",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee_type_enum:write",
+        "description": "创建、更新、删除自定义人员类型",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee:list",
+        "description": "调用 API 获取员工列表",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee:read",
+        "description": "调用 API 获取员工信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee:search",
+        "description": "搜索员工",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee:write",
+        "description": "创建、更新、离职、恢复员工",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.active_status:read",
+        "description": "查看员工账号活跃状态",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.avatar:read",
+        "description": "查看员工的头像",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.background_image:read",
+        "description": "查看员工的名片页自定义背景图",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.base:read",
+        "description": "查看员工个人基本信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.custom_field:read",
+        "description": "查看员工自定义字段值",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.data_source:read",
+        "description": "查看员工数据来源",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.department_path:read",
+        "description": "查看员工部门路径",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.department:read",
+        "description": "查看员工所属部门信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.dept_order:read",
+        "description": "查看员工在部门内的排序",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.description:read",
+        "description": "查看员工的个性签名",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.dotted_line_leaders:read",
+        "description": "查看员工虚线上级 ID",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.email:read",
+        "description": "查看员工工作邮箱",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.enterprise_email_alias:read",
+        "description": "查看员工的企业邮箱别名",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.enterprise_email:read",
+        "description": "查看员工企业邮箱",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.external_id:read",
+        "description": "查看员工自定义 ID",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.gender:read",
+        "description": "查看员工性别",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.geo:read",
+        "description": "查看员工数据驻留地",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.geo:write",
+        "description": "创建、更新、删除员工数据驻留地",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.is_admin:read",
+        "description": "查看员工是否是普通管理员",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.is_primary_admin:read",
+        "description": "查看员工是否是超级管理员",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.is_resigned:read",
+        "description": "查看员工离职状态",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.leader_id:read",
+        "description": "查看员工直属上级 ID",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.leader:read",
+        "description": "查看员工上级信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.mobile:read",
+        "description": "查看员工手机号",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.name.another_name:read",
+        "description": "查看员工的别名",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.name.first_name:read",
+        "description": "查看员工的名",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.name.last_name:read",
+        "description": "查看员工的姓",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.name.name:read",
+        "description": "查看员工的姓名",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.resign_time:read",
+        "description": "查看员工离职时间",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.role:read",
+        "description": "查看员工角色信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.status:read",
+        "description": "查看员工状态信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.subscription_ids:read",
+        "description": "查看员工席位信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.base.subscription_ids:write",
+        "description": "创建、更新、删除员工席位信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.create:write",
+        "description": "创建员工",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.idconvert:read",
+        "description": "获取员工 ID 转换信息",
+        "level": 1
+      },
+      {
+        "scope": "directory:employee.resign:write",
+        "description": "操作员工离职",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.resurrect:write",
+        "description": "恢复离职员工",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.update:write",
+        "description": "更新员工",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.base_work:read",
+        "description": "查看员工基础工作信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.employment_type:read",
+        "description": "查看员工的员工类型",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.extension_number:read",
+        "description": "查看员工的分机号",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.job_number:read",
+        "description": "查看员工的工号",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.job_title:read",
+        "description": "查看员工职务信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.join_date:read",
+        "description": "查看员工的入职日期",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.positions:read",
+        "description": "查看员工的岗位信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.resign_date:read",
+        "description": "查看员工离职日期",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.resign_reason:read",
+        "description": "查看员工离职原因",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.resign_remark:read",
+        "description": "查看员工离职备注",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.resign_type:read",
+        "description": "查看员工离职类型",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.staff_status:read",
+        "description": "查看员工的人事状态",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.work_country_or_region:read",
+        "description": "查看员工的工作国家/地区",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.work_place:read",
+        "description": "查看员工的工作地点",
+        "level": 2
+      },
+      {
+        "scope": "directory:employee.work.work_station:read",
+        "description": "查看员工的工位",
+        "level": 2
+      },
+      {
+        "scope": "directory:job_title:write",
+        "description": "创建、更新、删除职务",
+        "level": 2
+      },
+      {
+        "scope": "directory:job_title.base:read",
+        "description": "查看职务基础信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:job_title.status:read",
+        "description": "查看职务状态",
+        "level": 2
+      },
+      {
+        "scope": "directory:place:write",
+        "description": "创建、更新、删除地点",
+        "level": 2
+      },
+      {
+        "scope": "directory:place.base:read",
+        "description": "查看地点基础信息",
+        "level": 2
+      },
+      {
+        "scope": "directory:place.status:read",
+        "description": "查看地点状态",
+        "level": 2
+      }
+    ],
+    "contract": [
+      {
+        "scope": "contract:contract:readonly",
+        "description": "获取合同信息",
+        "level": 2
+      }
+    ],
+    "corehr": [
+      {
+        "scope": "corehr:common_data.basic_data:read",
+        "description": "获取基础数据信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:compensation_archive_detail:read",
+        "description": "获取基础薪酬的薪资档案信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:compensation_archive_detail.change_description:read",
+        "description": "获取薪资档案的调薪说明",
+        "level": 2
+      },
+      {
+        "scope": "corehr:compensation_archive_detail.indicators:read",
+        "description": "获取薪资档案的关联薪资指标",
+        "level": 2
+      },
+      {
+        "scope": "corehr:compensation_archive_detail.items:read",
+        "description": "获取薪资档案的关联薪资项",
+        "level": 2
+      },
+      {
+        "scope": "corehr:compensation_archive_detail.plan:read",
+        "description": "获取薪资档案的关联方案",
+        "level": 2
+      },
+      {
+        "scope": "corehr:compensation_archive_detail.salary_level:read",
+        "description": "获取薪资档案的关联薪级薪等",
+        "level": 2
+      },
+      {
+        "scope": "corehr:compensation_archive:write",
+        "description": "创建定调薪任务",
+        "level": 2
+      },
+      {
+        "scope": "corehr:compensation_standards:read",
+        "description": "获取薪资标准信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:contract.company:read",
+        "description": "获取合同主体信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:contract.company:write",
+        "description": "读写合同主体信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:contract.period:read",
+        "description": "获取合同期限信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:contract.period:write",
+        "description": "读写合同期限信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:corehr:query_id_by_name",
+        "description": "根据名称查询 ID 接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:corehr:readonly",
+        "description": "获取核心人事信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:cost_allocation:read",
+        "description": "读取成本分摊信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:cost_allocation:write",
+        "description": "写入成本分摊信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:cost_center:fields",
+        "description": "成本中心字段查询接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:cost_center:parents",
+        "description": "成本中心父级链查询接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:cost_center:search_data",
+        "description": "成本中心数据搜索接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:cost_center:tree",
+        "description": "成本中心架构树查询接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:custom_org:fields",
+        "description": "自定义组织字段查询接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:custom_org:objects",
+        "description": "获取自定义组织对象列表接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:custom_org:parents",
+        "description": "自定义组织父级链查询接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:custom_org:search",
+        "description": "自定义组织搜索接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:custom_org:tree",
+        "description": "自定义组织架构树查询接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:default_cost_center:read",
+        "description": "读取默认成本中心信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:default_cost_center:write",
+        "description": "写入默认成本中心信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:department:fields",
+        "description": "部门字段查询接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:department:parents",
+        "description": "部门父级链查询接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:department:search",
+        "description": "部门搜索接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:department:tree",
+        "description": "部门架构树查询接口权限",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employee:read",
+        "description": "获取员工信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employment_basic_info_query:read",
+        "description": "获取当前员工信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employment_column_list_query:read",
+        "description": "获取员工自定义列描述",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employment_info_filter:read",
+        "description": "筛选员工信息数据",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employment_info_query:read",
+        "description": "查询员工信息数据",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employment_info_search:read",
+        "description": "搜索员工信息数据",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employment_perm_check:read",
+        "description": "员工筛选权限校验",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employment.job_level:read",
+        "description": "获取职务级别信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employment.offboarding_reason:read",
+        "description": "获取员工离职原因",
+        "level": 2
+      },
+      {
+        "scope": "corehr:employment.offboarding_reason.search:read",
+        "description": "按照离职原因搜索",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_change:read",
+        "description": "获取员工异动信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_change.custom_field:read",
+        "description": "获取员工异动自定义字段信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_change.employment_custom_field:read",
+        "description": "获取异动工作信息自定义字段",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_change.is_adjust_salary:read",
+        "description": "获取异动单据调薪字段",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_change.pathway:read",
+        "description": "读取异动通道字段信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_change.pathway:write",
+        "description": "读写异动通道字段信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_change.remark:read",
+        "description": "获取异动流程备注信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_change.social_security_city:read",
+        "description": "获取异动单据社保字段",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_data.compensation_type:read",
+        "description": "获取薪资类型",
+        "level": 2
+      },
+      {
+        "scope": "corehr:job_data.service_company:read",
+        "description": "获取任职公司",
+        "level": 2
+      },
+      {
+        "scope": "corehr:leave_record:read",
+        "description": "获取员工请假记录",
+        "level": 2
+      },
+      {
+        "scope": "corehr:leaves:read",
+        "description": "查询员工假期余额",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding:read",
+        "description": "获取员工离职信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding.block_list:read",
+        "description": "获取离职屏蔽名单",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding.block_list:write",
+        "description": "读写离职屏蔽名单",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding.custom_field:read",
+        "description": "获取离职信息自定义字段信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding.last_attendance_date:read",
+        "description": "获取离职申请的最后出勤日",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding.noncompete_agreement:read",
+        "description": "获取离职申请的竞业信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding.retain_account:read",
+        "description": "获取离职后是否保留账号字段",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding.retain_account:write",
+        "description": "读写离职后是否保留账号字段",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding.signature:read",
+        "description": "获取离职申请的电子签相关字段",
+        "level": 2
+      },
+      {
+        "scope": "corehr:offboarding.social_insurance:read",
+        "description": "获取离职申请的社保信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:pre_hire.retrieve:read",
+        "description": "获取待入职信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:renewal:read",
+        "description": "获取续约记录信息",
+        "level": 1
+      },
+      {
+        "scope": "corehr:report.data:read",
+        "description": "查询人事报表数据",
+        "level": 2
+      },
+      {
+        "scope": "corehr:work_calendar:read",
+        "description": "查询工作日历",
+        "level": 2
+      },
+      {
+        "scope": "corehr:workforce_detail:read",
+        "description": "查看编制规划明细信息",
+        "level": 2
+      },
+      {
+        "scope": "corehr:workforce_plan:read",
+        "description": "查看编制规划方案信息",
+        "level": 2
+      }
+    ],
+    "docs": [
+      {
+        "scope": "docs:doc",
+        "description": "查看、评论、编辑和管理文档",
+        "level": 2
+      },
+      {
+        "scope": "docs:doc:readonly",
+        "description": "查看、评论和导出文档",
+        "level": 2
+      },
+      {
+        "scope": "docs:document:copy",
+        "description": "复制云文档",
+        "level": 2
+      },
+      {
+        "scope": "docs:document:export",
+        "description": "导出云文档",
+        "level": 2
+      },
+      {
+        "scope": "docs:document:import",
+        "description": "查看、创建云文档导入任务",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:create",
+        "description": "添加、回复云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:delete",
+        "description": "删除云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:read",
+        "description": "获取云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:update",
+        "description": "修改云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:write_only",
+        "description": "回复、修改、删除云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.content:read",
+        "description": "查看云文档内容",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.media:download",
+        "description": "下载云文档中的图片和附件",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.media:upload",
+        "description": "上传图片和附件到云文档中",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.subscription",
+        "description": "订阅云文档和更新云文档订阅状态",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.subscription:read",
+        "description": "获取云文档订阅状态",
+        "level": 2
+      },
+      {
+        "scope": "docs:event:subscribe",
+        "description": "订阅云文档事件",
+        "level": 2
+      },
+      {
+        "scope": "docs:event.document_deleted:read",
+        "description": "接收云文档删除事件",
+        "level": 2
+      },
+      {
+        "scope": "docs:event.document_edited:read",
+        "description": "接收云文档编辑事件",
+        "level": 2
+      },
+      {
+        "scope": "docs:event.document_opened:read",
+        "description": "接收云文档打开事件",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member",
+        "description": "查看、新增、更新、删除云文档协作者",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:apply",
+        "description": "申请云文档权限",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:auth",
+        "description": "判断当前用户是否有云文档权限",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:create",
+        "description": "添加云文档协作者",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:delete",
+        "description": "移除云文档协作者",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:readonly",
+        "description": "查看云文档协作者（历史版本）",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:retrieve",
+        "description": "查看云文档的协作者列表",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:transfer",
+        "description": "转移云文档的所有权",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:update",
+        "description": "更新云文档协作者权限",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.setting",
+        "description": "查看、更新云文档权限设置",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.setting:read",
+        "description": "查询云文档权限设置",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.setting:readonly",
+        "description": "查看云文档权限设置",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.setting:write_only",
+        "description": "修改云文档权限设置",
+        "level": 2
+      },
+      {
+        "scope": "docs:secure_label",
+        "description": "查看与更新云文档密级标签",
+        "level": 2
+      },
+      {
+        "scope": "docs:secure_label:readonly",
+        "description": "查看云文档密级标签",
+        "level": 2
+      },
+      {
+        "scope": "docs:secure_label:write_only",
+        "description": "修改文档密级",
+        "level": 2
+      },
+      {
+        "scope": "docx:document",
+        "description": "创建及编辑新版文档",
+        "level": 2
+      },
+      {
+        "scope": "docx:document:create",
+        "description": "创建新版文档",
+        "level": 2
+      },
+      {
+        "scope": "docx:document:readonly",
+        "description": "查看新版文档",
+        "level": 2
+      },
+      {
+        "scope": "docx:document:write_only",
+        "description": "编辑新版文档",
+        "level": 2
+      },
+      {
+        "scope": "docx:document.block:convert",
+        "description": "转换文本为云文档块",
+        "level": 2
+      },
+      {
+        "scope": "drive:document.content:read",
+        "description": "文档内容变更",
+        "level": 2
+      },
+      {
+        "scope": "drive:document.mention:read",
+        "description": "接收文档内mention",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive",
+        "description": "查看、评论、编辑和管理云空间中所有文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive:readonly",
+        "description": "查看、评论和下载云空间中所有文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive:version",
+        "description": "查看、创建、删除文档版本",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive:version:readonly",
+        "description": "查看文档版本",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive.metadata:readonly",
+        "description": "查看云空间中文件元数据",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive.search:readonly",
+        "description": "搜索云文档",
+        "level": 2
+      },
+      {
+        "scope": "drive:export:readonly",
+        "description": "导出云文档",
+        "level": 2
+      },
+      {
+        "scope": "drive:file",
+        "description": "上传、下载文件到云空间",
+        "level": 2
+      },
+      {
+        "scope": "drive:file:download",
+        "description": "下载云空间下的文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:file:readonly",
+        "description": "查看和下载云空间中的文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:file:upload",
+        "description": "上传文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:file:view_record:readonly",
+        "description": "获取文档访问记录",
+        "level": 2
+      },
+      {
+        "scope": "drive:file.like:readonly",
+        "description": "查看云文档的点赞信息",
+        "level": 2
+      },
+      {
+        "scope": "drive:file.meta.sec_label.read_only",
+        "description": "获取文档密级标签名称",
+        "level": 2
+      },
+      {
+        "scope": "drive:quota_detail:read_one",
+        "description": "获取自身容量信息",
+        "level": 2
+      },
+      {
+        "scope": "space:document:delete",
+        "description": "删除云空间文件夹和云文档",
+        "level": 2
+      },
+      {
+        "scope": "space:document:move",
+        "description": "移动云空间文件夹和云文档",
+        "level": 2
+      },
+      {
+        "scope": "space:document:retrieve",
+        "description": "获取云空间文件夹下的云文档清单",
+        "level": 2
+      },
+      {
+        "scope": "space:document:shortcut",
+        "description": "创建云文档的快捷方式",
+        "level": 2
+      },
+      {
+        "scope": "space:document.event:read",
+        "description": "订阅文件夹下的文件相关事件",
+        "level": 2
+      }
+    ],
+    "markdown": [
+      {
+        "scope": "docs:doc",
+        "description": "查看、评论、编辑和管理文档",
+        "level": 2
+      },
+      {
+        "scope": "docs:doc:readonly",
+        "description": "查看、评论和导出文档",
+        "level": 2
+      },
+      {
+        "scope": "docs:document:copy",
+        "description": "复制云文档",
+        "level": 2
+      },
+      {
+        "scope": "docs:document:export",
+        "description": "导出云文档",
+        "level": 2
+      },
+      {
+        "scope": "docs:document:import",
+        "description": "查看、创建云文档导入任务",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:create",
+        "description": "添加、回复云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:delete",
+        "description": "删除云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:read",
+        "description": "获取云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:update",
+        "description": "修改云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.comment:write_only",
+        "description": "回复、修改、删除云文档中的评论",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.content:read",
+        "description": "查看云文档内容",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.media:download",
+        "description": "下载云文档中的图片和附件",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.media:upload",
+        "description": "上传图片和附件到云文档中",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.subscription",
+        "description": "订阅云文档和更新云文档订阅状态",
+        "level": 2
+      },
+      {
+        "scope": "docs:document.subscription:read",
+        "description": "获取云文档订阅状态",
+        "level": 2
+      },
+      {
+        "scope": "docs:event:subscribe",
+        "description": "订阅云文档事件",
+        "level": 2
+      },
+      {
+        "scope": "docs:event.document_deleted:read",
+        "description": "接收云文档删除事件",
+        "level": 2
+      },
+      {
+        "scope": "docs:event.document_edited:read",
+        "description": "接收云文档编辑事件",
+        "level": 2
+      },
+      {
+        "scope": "docs:event.document_opened:read",
+        "description": "接收云文档打开事件",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member",
+        "description": "查看、新增、更新、删除云文档协作者",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:apply",
+        "description": "申请云文档权限",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:auth",
+        "description": "判断当前用户是否有云文档权限",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:create",
+        "description": "添加云文档协作者",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:delete",
+        "description": "移除云文档协作者",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:readonly",
+        "description": "查看云文档协作者（历史版本）",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:retrieve",
+        "description": "查看云文档的协作者列表",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:transfer",
+        "description": "转移云文档的所有权",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.member:update",
+        "description": "更新云文档协作者权限",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.setting",
+        "description": "查看、更新云文档权限设置",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.setting:read",
+        "description": "查询云文档权限设置",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.setting:readonly",
+        "description": "查看云文档权限设置",
+        "level": 2
+      },
+      {
+        "scope": "docs:permission.setting:write_only",
+        "description": "修改云文档权限设置",
+        "level": 2
+      },
+      {
+        "scope": "docs:secure_label",
+        "description": "查看与更新云文档密级标签",
+        "level": 2
+      },
+      {
+        "scope": "docs:secure_label:readonly",
+        "description": "查看云文档密级标签",
+        "level": 2
+      },
+      {
+        "scope": "docs:secure_label:write_only",
+        "description": "修改文档密级",
+        "level": 2
+      },
+      {
+        "scope": "docx:document",
+        "description": "创建及编辑新版文档",
+        "level": 2
+      },
+      {
+        "scope": "docx:document:create",
+        "description": "创建新版文档",
+        "level": 2
+      },
+      {
+        "scope": "docx:document:readonly",
+        "description": "查看新版文档",
+        "level": 2
+      },
+      {
+        "scope": "docx:document:write_only",
+        "description": "编辑新版文档",
+        "level": 2
+      },
+      {
+        "scope": "docx:document.block:convert",
+        "description": "转换文本为云文档块",
+        "level": 2
+      }
+    ],
+    "document_ai": [
+      {
+        "scope": "document_ai:health_certificate:recognize",
+        "description": "识别健康证",
+        "level": 1
+      },
+      {
+        "scope": "document_ai:vehicle_invoice:recognize",
+        "description": "识别机动车发票",
+        "level": 1
+      }
+    ],
+    "drive": [
+      {
+        "scope": "drive:document.content:read",
+        "description": "文档内容变更",
+        "level": 2
+      },
+      {
+        "scope": "drive:document.mention:read",
+        "description": "接收文档内mention",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive",
+        "description": "查看、评论、编辑和管理云空间中所有文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive:readonly",
+        "description": "查看、评论和下载云空间中所有文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive:version",
+        "description": "查看、创建、删除文档版本",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive:version:readonly",
+        "description": "查看文档版本",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive.metadata:readonly",
+        "description": "查看云空间中文件元数据",
+        "level": 2
+      },
+      {
+        "scope": "drive:drive.search:readonly",
+        "description": "搜索云文档",
+        "level": 2
+      },
+      {
+        "scope": "drive:export:readonly",
+        "description": "导出云文档",
+        "level": 2
+      },
+      {
+        "scope": "drive:file",
+        "description": "上传、下载文件到云空间",
+        "level": 2
+      },
+      {
+        "scope": "drive:file:download",
+        "description": "下载云空间下的文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:file:readonly",
+        "description": "查看和下载云空间中的文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:file:upload",
+        "description": "上传文件",
+        "level": 2
+      },
+      {
+        "scope": "drive:file:view_record:readonly",
+        "description": "获取文档访问记录",
+        "level": 2
+      },
+      {
+        "scope": "drive:file.like:readonly",
+        "description": "查看云文档的点赞信息",
+        "level": 2
+      },
+      {
+        "scope": "drive:file.meta.sec_label.read_only",
+        "description": "获取文档密级标签名称",
+        "level": 2
+      },
+      {
+        "scope": "drive:quota_detail:read_one",
+        "description": "获取自身容量信息",
+        "level": 2
+      },
+      {
+        "scope": "space:document:delete",
+        "description": "删除云空间文件夹和云文档",
+        "level": 2
+      },
+      {
+        "scope": "space:document:move",
+        "description": "移动云空间文件夹和云文档",
+        "level": 2
+      },
+      {
+        "scope": "space:document:retrieve",
+        "description": "获取云空间文件夹下的云文档清单",
+        "level": 2
+      },
+      {
+        "scope": "space:document:shortcut",
+        "description": "创建云文档的快捷方式",
+        "level": 2
+      },
+      {
+        "scope": "space:document.event:read",
+        "description": "订阅文件夹下的文件相关事件",
+        "level": 2
+      }
+    ],
+    "ea_integration_platform": [
+      {
+        "scope": "ea_integration_platform:lawfirm_attorney_capacity:read",
+        "description": "读取律所和律师容量",
+        "level": 2
+      }
+    ],
+    "event": [
+      {
+        "scope": "event:ip_list",
+        "description": "获取事件的出口 IP",
+        "level": 1
+      }
+    ],
+    "helpdesk": [
+      {
+        "scope": "helpdesk:all",
+        "description": "更新服务台资源详情",
+        "level": 2
+      },
+      {
+        "scope": "helpdesk:all:readonly",
+        "description": "获取服务台资源详情",
+        "level": 2
+      }
+    ],
+    "hire": [
+      {
+        "scope": "hire:application:readonly",
+        "description": "获取投递信息",
+        "level": 2
+      },
+      {
+        "scope": "hire:evaluation:readonly",
+        "description": "获取简历评估信息",
+        "level": 2
+      },
+      {
+        "scope": "hire:exam:readonly",
+        "description": "获取笔试信息",
+        "level": 2
+      },
+      {
+        "scope": "hire:interview:readonly",
+        "description": "获取面试信息",
+        "level": 2
+      },
+      {
+        "scope": "hire:job_process:readonly",
+        "description": "获取招聘流程信息",
+        "level": 2
+      },
+      {
+        "scope": "hire:job_requirement:readonly",
+        "description": "获取招聘需求信息",
+        "level": 2
+      },
+      {
+        "scope": "hire:job:readonly",
+        "description": "获取职位信息",
+        "level": 2
+      },
+      {
+        "scope": "hire:job.composite_info:readonly",
+        "description": "查看职位详情信息",
+        "level": 2
+      },
+      {
+        "scope": "hire:report.data:read",
+        "description": "招聘报表数据查询权限",
+        "level": 2
+      },
+      {
+        "scope": "hire:talent_tag:readonly",
+        "description": "获取人才标签",
+        "level": 1
+      },
+      {
+        "scope": "hire:talent:readonly",
+        "description": "获取人才信息",
+        "level": 2
+      },
+      {
+        "scope": "hire:todo:readonly",
+        "description": "获取招聘待办信息",
+        "level": 1
+      }
+    ],
+    "im": [
+      {
+        "scope": "im:chat",
+        "description": "获取与更新群组信息",
+        "level": 1
+      },
+      {
+        "scope": "im:chat:create_by_user",
+        "description": "以用户身份创建群",
+        "level": 2
+      },
+      {
+        "scope": "im:chat:delete",
+        "description": "解散群",
+        "level": 2
+      },
+      {
+        "scope": "im:chat:moderation:write_only",
+        "description": "操作群发言权限",
+        "level": 2
+      },
+      {
+        "scope": "im:chat:read",
+        "description": "查看群信息",
+        "level": 2
+      },
+      {
+        "scope": "im:chat:readonly",
+        "description": "获取群组信息",
+        "level": 1
+      },
+      {
+        "scope": "im:chat:update",
+        "description": "更新群信息",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.access_event.bot_p2p_chat:read",
+        "description": "订阅访问机器人会话相关事件",
+        "level": 1
+      },
+      {
+        "scope": "im:chat.announcement:read",
+        "description": "查看群公告信息",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.announcement:write_only",
+        "description": "更新群公告内容",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.chat_pins:read",
+        "description": "查看新版群置顶",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.chat_pins:write_only",
+        "description": "操作新版群置顶",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.collab_plugins:read",
+        "description": "查询群组与插件的关联关系",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.collab_plugins:write_only",
+        "description": "创建、解除群组与插件的关联关系",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.managers:write_only",
+        "description": "添加、删除群管理员",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.members:read",
+        "description": "查看群成员",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.members:write_only",
+        "description": "添加、移除群成员",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.membership_application:read",
+        "description": "获取入群申请信息",
+        "level": 1
+      },
+      {
+        "scope": "im:chat.membership_application:write",
+        "description": "审批入群申请",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.moderation:read",
+        "description": "查看群发言权限",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.nickname:read",
+        "description": "获取用户在群内的昵称",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.nickname:write",
+        "description": "修改用户群内的昵称",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.tabs:read",
+        "description": "查看群会话标签页",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.tabs:write_only",
+        "description": "操作群会话标签页",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.top_notice:write_only",
+        "description": "操作群置顶",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.user_setting:read",
+        "description": "查看群内用户个人设置",
+        "level": 2
+      },
+      {
+        "scope": "im:chat.user_setting:write",
+        "description": "修改群内用户个人设置",
+        "level": 2
+      },
+      {
+        "scope": "im:feed_group_v1:read",
+        "description": "获取标签相关数据",
+        "level": 2
+      },
+      {
+        "scope": "im:feed_group_v1:write",
+        "description": "创建、更新、删除标签相关数据",
+        "level": 2
+      },
+      {
+        "scope": "im:feed.flag:read",
+        "description": "获取标记数据",
+        "level": 2
+      },
+      {
+        "scope": "im:feed.flag:write",
+        "description": "创建、删除标记",
+        "level": 2
+      },
+      {
+        "scope": "im:feed.shortcut:read",
+        "description": "查看置顶",
+        "level": 2
+      },
+      {
+        "scope": "im:feed.shortcut:write",
+        "description": "创建、删除置顶",
+        "level": 2
+      },
+      {
+        "scope": "im:message",
+        "description": "获取与发送单聊、群组消息",
+        "level": 1
+      },
+      {
+        "scope": "im:message:readonly",
+        "description": "获取单聊、群组消息",
+        "level": 1
+      },
+      {
+        "scope": "im:message:recall",
+        "description": "撤回消息",
+        "level": 1
+      },
+      {
+        "scope": "im:message:update",
+        "description": "更新消息",
+        "level": 1
+      },
+      {
+        "scope": "im:message.draft_write_as_user",
+        "description": "云端草稿多端同步",
+        "level": 1
+      },
+      {
+        "scope": "im:message.group_msg:get_as_user",
+        "description": "以用户身份获取群聊消息",
+        "level": 2
+      },
+      {
+        "scope": "im:message.p2p_msg:get_as_user",
+        "description": "以用户身份获取单聊群消息",
+        "level": 2
+      },
+      {
+        "scope": "im:message.pins:read",
+        "description": "查看 Pin 消息",
+        "level": 1
+      },
+      {
+        "scope": "im:message.pins:write_only",
+        "description": "添加、 取消 Pin 消息",
+        "level": 1
+      },
+      {
+        "scope": "im:message.reactions:read",
+        "description": "查看消息表情回复",
+        "level": 1
+      },
+      {
+        "scope": "im:message.reactions:write_only",
+        "description": "发送、删除消息表情回复",
+        "level": 1
+      },
+      {
+        "scope": "im:message.send_as_user",
+        "description": "以用户身份发送消息",
+        "level": 2
+      },
+      {
+        "scope": "im:message.urgent.status:write",
+        "description": "修改消息加急状态",
+        "level": 2
+      },
+      {
+        "scope": "im:resource",
+        "description": "获取与上传图片或文件资源 ",
+        "level": 2
+      }
+    ],
+    "mail": [
+      {
+        "scope": "mail:event",
+        "description": "订阅邮箱相关事件",
+        "level": 2
+      },
+      {
+        "scope": "mail:public_mailbox",
+        "description": "查询、创建、修改公共邮箱",
+        "level": 2
+      },
+      {
+        "scope": "mail:public_mailbox:readonly",
+        "description": "查询公共邮箱",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox:readonly",
+        "description": "查询用户的企业邮箱",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.event.mail_address:read",
+        "description": "获取事件中的邮箱地址字段",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.folder:read",
+        "description": "查询邮箱文件夹",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.folder:write",
+        "description": "查看、创建、更新、删除邮箱文件夹",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.mail_contact:read",
+        "description": "查看邮箱联系人",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.mail_contact:write",
+        "description": "查看、创建、更新、删除邮箱联系人",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.mail_contact.mail_address:read",
+        "description": "读取邮箱联系人邮箱地址字段",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.mail_contact.phone:read",
+        "description": "读取邮箱联系人手机号字段",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.message:modify",
+        "description": "修改邮件",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.message:readonly",
+        "description": "查询用户邮件",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.message:send",
+        "description": "发送用户邮件",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.message.address:read",
+        "description": "获取邮件内容中地址相关字段",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.message.body:read",
+        "description": "获取邮件正文",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.message.subject:read",
+        "description": "获取邮件主题",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.rule:read",
+        "description": "查看收信规则",
+        "level": 2
+      },
+      {
+        "scope": "mail:user_mailbox.rule:write",
+        "description": "查看、创建、更新、删除收信规则",
+        "level": 2
+      }
+    ],
+    "mdm": [
+      {
+        "scope": "mdm:company.company_bank_account.account:readonly",
+        "description": "获取公司银行账号信息主数据",
+        "level": 1
+      },
+      {
+        "scope": "mdm:legal_entity",
+        "description": "查看、创建、编辑主数据中的法人实体相关信息",
+        "level": 2
+      },
+      {
+        "scope": "mdm:legal_entity:readonly",
+        "description": "获取主数据中的法人实体信息",
+        "level": 2
+      },
+      {
+        "scope": "mdm:spend",
+        "description": "查看、创建、编辑和删除费控主数据信息",
+        "level": 2
+      },
+      {
+        "scope": "mdm:spend:readonly",
+        "description": "获取费控主数据信息",
+        "level": 2
+      },
+      {
+        "scope": "mdm:vendor",
+        "description": "查看、创建、编辑主数据中的供应商相关信息",
+        "level": 2
+      },
+      {
+        "scope": "mdm:vendor:readonly",
+        "description": "获取主数据中的供应商信息",
+        "level": 2
+      }
+    ],
+    "mindnotes": [
+      {
+        "scope": "mindnote:node:create",
+        "description": "创建Mindnote节点",
+        "level": 2
+      },
+      {
+        "scope": "mindnote:node:read",
+        "description": "获取Mindnote节点",
+        "level": 2
+      }
+    ],
+    "minutes": [
+      {
+        "scope": "minutes:minute:download",
+        "description": "导出妙记文件",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes",
+        "description": "查看、创建、编辑及管理妙记文件",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes:readonly",
+        "description": "查看妙记文件",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes:update",
+        "description": "更新妙记",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes.artifacts:read",
+        "description": "获取妙记 AI 产物",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes.basic:read",
+        "description": "获取妙记的基本信息",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes.clip:write",
+        "description": "创建妙记片段",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes.media:export",
+        "description": "下载妙记的音视频文件",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes.search:read",
+        "description": "搜索妙记",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes.statistics:read",
+        "description": "获取妙记的统计信息",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes.transcript:export",
+        "description": "导出妙记转写的文字内容",
+        "level": 2
+      },
+      {
+        "scope": "minutes:minutes.upload:write",
+        "description": "基于音视频文件生成妙记",
+        "level": 2
+      },
+      {
+        "scope": "minutes:permission:apply",
+        "description": "申请妙记权限",
+        "level": 2
+      }
+    ],
+    "okr": [
+      {
+        "scope": "okr:okr",
+        "description": "更新 OKR 信息",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr:readonly",
+        "description": "获取 OKR 信息",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.comment.delete",
+        "description": "删除 OKR 评论",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.comment.readonly",
+        "description": "获取 OKR 评论",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.comment.writeonly",
+        "description": "更新 OKR 评论",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.content:readonly",
+        "description": "获取 OKR 内容",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.content:writeonly",
+        "description": "更新 OKR 内容",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.period:readonly",
+        "description": "获取 OKR 周期",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.progress:delete",
+        "description": "删除 OKR 进展",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.progress:readonly",
+        "description": "获取 OKR 进展",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.progress:writeonly",
+        "description": "更新 OKR 进展",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.progress.file:upload",
+        "description": "上传 OKR 进展图片附件",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.review:readonly",
+        "description": "获取 OKR 复盘",
+        "level": 2
+      },
+      {
+        "scope": "okr:okr.setting:read",
+        "description": "查看 OKR 设置",
+        "level": 2
+      }
+    ],
+    "payroll": [
+      {
+        "scope": "payroll:cost_allocation_details:read",
+        "description": "获取成本分摊报表明细数据",
+        "level": 2
+      },
+      {
+        "scope": "payroll:external_datasource_configuration:read",
+        "description": "读取 Payroll 外部数据源设置",
+        "level": 2
+      },
+      {
+        "scope": "payroll:external_datasource_record:read",
+        "description": "查询 Payroll 外部数据记录",
+        "level": 2
+      },
+      {
+        "scope": "payroll:external_datasource_record:write",
+        "description": "写入 Payroll 外部数据记录",
+        "level": 2
+      },
+      {
+        "scope": "payroll:payment_activity_details:read",
+        "description": "获取发薪明细数据",
+        "level": 2
+      },
+      {
+        "scope": "payroll:payment_activity:archive",
+        "description": "封存发薪活动",
+        "level": 2
+      },
+      {
+        "scope": "payroll:payment_activity:monitor",
+        "description": "订阅发薪活动状态变更事件",
+        "level": 2
+      },
+      {
+        "scope": "payroll:payment_activity:read",
+        "description": "获取发薪活动列表",
+        "level": 2
+      },
+      {
+        "scope": "payroll:payment_details:read",
+        "description": "获取发薪明细数据 V2",
+        "level": 2
+      },
+      {
+        "scope": "payroll:payroll_calculation_item:read",
+        "description": "获取算薪项信息",
+        "level": 2
+      }
+    ],
+    "performance": [
+      {
+        "scope": "performance:performance",
+        "description": "管理绩效数据",
+        "level": 2
+      },
+      {
+        "scope": "performance:performance:readonly",
+        "description": "查看绩效数据",
+        "level": 2
+      },
+      {
+        "scope": "performance:semester:read",
+        "description": "查看周期数据",
+        "level": 2
+      }
+    ],
+    "profile": [
+      {
+        "scope": "profile:user_profile:read",
+        "description": "查看用户的个性签名和状态",
+        "level": 2
+      }
+    ],
+    "report": [
+      {
+        "scope": "report:task:readonly",
+        "description": "查看汇报任务",
+        "level": 2
+      }
+    ],
+    "rule_engine": [
+      {
+        "scope": "rule_engine:rule_table",
+        "description": "预发布和发布规则表配置",
+        "level": 2
+      },
+      {
+        "scope": "rule_engine:rule_table:readonly",
+        "description": "查看规则表信息",
+        "level": 1
+      },
+      {
+        "scope": "rule_engine:rule_table.column:readonly",
+        "description": "查看规则表列信息",
+        "level": 1
+      },
+      {
+        "scope": "rule_engine:rule_table.row",
+        "description": "创建、更新、删除规则表行",
+        "level": 2
+      },
+      {
+        "scope": "rule_engine:rule_table.row:readonly",
+        "description": "查看规则表行信息",
+        "level": 1
+      }
+    ],
+    "search": [
+      {
+        "scope": "search:app",
+        "description": "获取应用搜索结果",
+        "level": 2
+      },
+      {
+        "scope": "search:bot",
+        "description": "搜索机器人",
+        "level": 2
+      },
+      {
+        "scope": "search:department:read",
+        "description": "搜索部门",
+        "level": 2
+      },
+      {
+        "scope": "search:docs:read",
+        "description": "搜索云文档",
+        "level": 1
+      },
+      {
+        "scope": "search:memory_graph_tool_call:read",
+        "description": "调用 Graph 工具",
+        "level": 2
+      },
+      {
+        "scope": "search:message",
+        "description": "获取消息搜索结果",
+        "level": 2
+      },
+      {
+        "scope": "search:nls:readonly",
+        "description": "基于自然语言搜索实体",
+        "level": 2
+      },
+      {
+        "scope": "search:qa:readonly",
+        "description": "对用户提供的文本进行向量化或排序",
+        "level": 1
+      },
+      {
+        "scope": "search:suite_dataset:readonly",
+        "description": "查看套件内部用于向量召回的数据集",
+        "level": 2
+      }
+    ],
+    "security_and_compliance": [
+      {
+        "scope": "security_and_compliance:device_apply_record:read",
+        "description": "查询自主申报申请",
+        "level": 2
+      },
+      {
+        "scope": "security_and_compliance:device_apply_record:write",
+        "description": "审核自主申报申请",
+        "level": 2
+      },
+      {
+        "scope": "security_and_compliance:device_record:read",
+        "description": "获取设备信息",
+        "level": 2
+      },
+      {
+        "scope": "security_and_compliance:device_record:write",
+        "description": "新增、更新、删除设备",
+        "level": 2
+      },
+      {
+        "scope": "security_and_compliance:multi_geo_entity.tenant:readonly",
+        "description": "查看数据驻留租户信息",
+        "level": 1
+      },
+      {
+        "scope": "security_and_compliance:user_migration",
+        "description": "创建、更新用户数据迁移",
+        "level": 2
+      },
+      {
+        "scope": "security_and_compliance:user_migration_task",
+        "description": "创建、更新用户数据迁移任务",
+        "level": 2
+      },
+      {
+        "scope": "security_and_compliance:user_migration:readonly",
+        "description": "查看用户数据迁移",
+        "level": 1
+      },
+      {
+        "scope": "security_and_compliance:vault.content_search",
+        "description": "使用内容审计功能导出成员内容",
+        "level": 2
+      }
+    ],
+    "serviceaccount": [
+      {
+        "scope": "serviceaccount:approval:approvals:read",
+        "description": "以用户身份获取用户可见的审批定义列表",
+        "level": 2
+      }
+    ],
+    "sheets": [
+      {
+        "scope": "sheets:spreadsheet",
+        "description": "查看、评论、编辑和管理电子表格",
+        "level": 2
+      },
+      {
+        "scope": "sheets:spreadsheet:create",
+        "description": "创建电子表格",
+        "level": 2
+      },
+      {
+        "scope": "sheets:spreadsheet:read",
+        "description": "查看电子表格",
+        "level": 2
+      },
+      {
+        "scope": "sheets:spreadsheet:readonly",
+        "description": "查看、评论和导出电子表格",
+        "level": 2
+      },
+      {
+        "scope": "sheets:spreadsheet:write_only",
+        "description": "编辑电子表格",
+        "level": 2
+      },
+      {
+        "scope": "sheets:spreadsheet.meta:read",
+        "description": "查询电子表格元信息",
+        "level": 2
+      },
+      {
+        "scope": "sheets:spreadsheet.meta:write_only",
+        "description": "修改电子表格元信息",
+        "level": 2
+      }
+    ],
+    "slides": [
+      {
+        "scope": "slides:presentation:create",
+        "description": "创建幻灯片",
+        "level": 2
+      },
+      {
+        "scope": "slides:presentation:read",
+        "description": "查看幻灯片",
+        "level": 2
+      },
+      {
+        "scope": "slides:presentation:screenshot",
+        "description": "幻灯片截图",
+        "level": 2
+      },
+      {
+        "scope": "slides:presentation:update",
+        "description": "编辑幻灯片",
+        "level": 2
+      },
+      {
+        "scope": "slides:presentation:write_only",
+        "description": "创建及编辑幻灯片",
+        "level": 2
+      }
+    ],
+    "space": [
+      {
+        "scope": "space:folder:create",
+        "description": "创建云空间文件夹",
+        "level": 2
+      }
+    ],
+    "spark": [
+      {
+        "scope": "spark:admin:read",
+        "description": "查看妙搭企业级管理配置",
+        "level": 1
+      },
+      {
+        "scope": "spark:admin:write",
+        "description": "更新妙搭企业级管理配置",
+        "level": 1
+      },
+      {
+        "scope": "spark:app:publish",
+        "description": "发布妙搭应用",
+        "level": 2
+      },
+      {
+        "scope": "spark:app:read",
+        "description": "获取妙搭应用信息",
+        "level": 2
+      },
+      {
+        "scope": "spark:app:write",
+        "description": "创建与更新妙搭应用",
+        "level": 2
+      },
+      {
+        "scope": "spark:app.sql_commands:write",
+        "description": "执行 SQL 语句",
+        "level": 2
+      },
+      {
+        "scope": "spark:app.storage:write",
+        "description": "获取与上传文件资源",
+        "level": 2
+      },
+      {
+        "scope": "spark:app.table:read",
+        "description": "读取数据表信息",
+        "level": 2
+      },
+      {
+        "scope": "spark:app.table:write",
+        "description": "修改数据表信息",
+        "level": 2
+      },
+      {
+        "scope": "spark:app.table.record:read",
+        "description": "读取数据表记录",
+        "level": 2
+      },
+      {
+        "scope": "spark:app.table.record:write",
+        "description": "修改或删除数据表记录",
+        "level": 2
+      },
+      {
+        "scope": "spark:directory.user.id_convert:read",
+        "description": "查看妙搭和飞书用户 ID 转换信息",
+        "level": 2
+      }
+    ],
+    "subscriptions": [
+      {
+        "scope": "subscriptions:account.follow_relation:read",
+        "description": "获取订阅号关注状态",
+        "level": 1
+      },
+      {
+        "scope": "subscriptions:account.follow_relation:write",
+        "description": "修改订阅号关注状态",
+        "level": 1
+      }
+    ],
+    "task": [
+      {
+        "scope": "task:attachment:read",
+        "description": "查看任务附件",
+        "level": 1
+      },
+      {
+        "scope": "task:attachment:write",
+        "description": "查看、创建、删除任务附件",
+        "level": 2
+      },
+      {
+        "scope": "task:comment",
+        "description": "查看、创建、修改、删除任务评论（旧版）",
+        "level": 2
+      },
+      {
+        "scope": "task:comment:read",
+        "description": "查看任务评论",
+        "level": 1
+      },
+      {
+        "scope": "task:comment:readonly",
+        "description": "查看任务评论（旧版）",
+        "level": 1
+      },
+      {
+        "scope": "task:comment:write",
+        "description": "查看、创建、更新、删除任务评论",
+        "level": 2
+      },
+      {
+        "scope": "task:custom_field:read",
+        "description": "查看自定义字段信息",
+        "level": 1
+      },
+      {
+        "scope": "task:custom_field:write",
+        "description": "查看、创建、更新自定义字段",
+        "level": 1
+      },
+      {
+        "scope": "task:section:read",
+        "description": "查看自定义分组",
+        "level": 1
+      },
+      {
+        "scope": "task:section:write",
+        "description": "查看、创建、更新、删除自定义分组",
+        "level": 2
+      },
+      {
+        "scope": "task:task",
+        "description": "查看、创建、编辑和删除任务（旧版）",
+        "level": 2
+      },
+      {
+        "scope": "task:task:read",
+        "description": "查看任务信息",
+        "level": 1
+      },
+      {
+        "scope": "task:task:readonly",
+        "description": "查看任务详情",
+        "level": 1
+      },
+      {
+        "scope": "task:task:write",
+        "description": "查看、创建、更新、删除任务",
+        "level": 2
+      },
+      {
+        "scope": "task:task:writeonly",
+        "description": "创建、更新任务",
+        "level": 2
+      },
+      {
+        "scope": "task:tasklist:read",
+        "description": "查看任务清单",
+        "level": 1
+      },
+      {
+        "scope": "task:tasklist:write",
+        "description": "查看、创建、更新、删除任务清单",
+        "level": 2
+      }
+    ],
+    "tenant": [
+      {
+        "scope": "tenant:tenant:readonly",
+        "description": "获取企业信息",
+        "level": 1
+      }
+    ],
+    "trust_party": [
+      {
+        "scope": "trust_party:collaboration_rule:read",
+        "description": "获取关联组织协作规则",
+        "level": 2
+      },
+      {
+        "scope": "trust_party:collaboration_rule:write",
+        "description": "变更关联组织协作规则",
+        "level": 2
+      },
+      {
+        "scope": "trust_party:collaboration.tenant:readonly",
+        "description": "以应用身份读取关联组织",
+        "level": 2
+      },
+      {
+        "scope": "trust_party:collaboration.tenant:writeonly",
+        "description": "创建关联组织关系",
+        "level": 2
+      },
+      {
+        "scope": "trust_party:im:chat",
+        "description": "在关联组织中获取与更新群组信息",
+        "level": 2
+      }
+    ],
+    "vc": [
+      {
+        "scope": "vc:export",
+        "description": "导出视频会议信息",
+        "level": 2
+      },
+      {
+        "scope": "vc:meeting",
+        "description": "更新会议信息",
+        "level": 2
+      },
+      {
+        "scope": "vc:meeting.bot.join:write",
+        "description": "加入、离开会议",
+        "level": 2
+      },
+      {
+        "scope": "vc:meeting.bot.manage:write",
+        "description": "机器人会中控制",
+        "level": 2
+      },
+      {
+        "scope": "vc:meeting.interaction:write",
+        "description": "使用会中交互功能",
+        "level": 2
+      },
+      {
+        "scope": "vc:meeting.meetingevent:read",
+        "description": "获取会议信息",
+        "level": 2
+      },
+      {
+        "scope": "vc:meeting.meetingid:read",
+        "description": "获取会议基本信息",
+        "level": 2
+      },
+      {
+        "scope": "vc:meeting.message:write",
+        "description": "发送会中消息和表情",
+        "level": 2
+      },
+      {
+        "scope": "vc:meeting.search:read",
+        "description": "搜索视频会议",
+        "level": 2
+      },
+      {
+        "scope": "vc:meeting.subtitle:read",
+        "description": "获取会中字幕",
+        "level": 2
+      },
+      {
+        "scope": "vc:note:read",
+        "description": "获取智能纪要",
+        "level": 2
+      },
+      {
+        "scope": "vc:record",
+        "description": "更新会议录制信息",
+        "level": 2
+      },
+      {
+        "scope": "vc:record:readonly",
+        "description": "获取会议录制信息",
+        "level": 2
+      },
+      {
+        "scope": "vc:recording:read",
+        "description": "获取录音的基本信息",
+        "level": 2
+      },
+      {
+        "scope": "vc:reserve",
+        "description": "更新会议预约信息",
+        "level": 2
+      },
+      {
+        "scope": "vc:reserve:readonly",
+        "description": "获取会议预约信息",
+        "level": 1
+      },
+      {
+        "scope": "vc:room",
+        "description": "更新视频会议室信息",
+        "level": 2
+      },
+      {
+        "scope": "vc:room:readonly",
+        "description": "获取视频会议室信息",
+        "level": 1
+      }
+    ],
+    "wiki": [
+      {
+        "scope": "wiki:member:create",
+        "description": "新增知识空间成员",
+        "level": 2
+      },
+      {
+        "scope": "wiki:member:retrieve",
+        "description": "查看知识空间成员列表",
+        "level": 2
+      },
+      {
+        "scope": "wiki:member:update",
+        "description": "更新知识空间成员",
+        "level": 2
+      },
+      {
+        "scope": "wiki:node:copy",
+        "description": "创建知识空间节点副本",
+        "level": 2
+      },
+      {
+        "scope": "wiki:node:create",
+        "description": "创建知识空间节点",
+        "level": 2
+      },
+      {
+        "scope": "wiki:node:move",
+        "description": "移动知识空间节点",
+        "level": 2
+      },
+      {
+        "scope": "wiki:node:read",
+        "description": "查看知识空间节点信息",
+        "level": 2
+      },
+      {
+        "scope": "wiki:node:retrieve",
+        "description": "查看知识空间节点列表",
+        "level": 2
+      },
+      {
+        "scope": "wiki:node:update",
+        "description": "更新知识空间节点信息",
+        "level": 2
+      },
+      {
+        "scope": "wiki:setting:read",
+        "description": "查看知识空间设置",
+        "level": 2
+      },
+      {
+        "scope": "wiki:setting:write_only",
+        "description": "更新知识空间设置",
+        "level": 2
+      },
+      {
+        "scope": "wiki:space:read",
+        "description": "查看知识空间信息",
+        "level": 2
+      },
+      {
+        "scope": "wiki:space:retrieve",
+        "description": "查看知识空间列表",
+        "level": 2
+      },
+      {
+        "scope": "wiki:space:write_only",
+        "description": "创建、更新知识空间",
+        "level": 2
+      },
+      {
+        "scope": "wiki:wiki",
+        "description": "查看、编辑和管理知识库",
+        "level": 2
+      },
+      {
+        "scope": "wiki:wiki:readonly",
+        "description": "查看知识库",
+        "level": 2
+      }
+    ]
+  }
+}

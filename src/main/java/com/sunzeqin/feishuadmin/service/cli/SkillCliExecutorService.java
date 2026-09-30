@@ -6,6 +6,7 @@ import com.sunzeqin.feishuadmin.pojo.FeishuMessageEvent;
 import com.sunzeqin.feishuadmin.pojo.UserOAuthToken;
 import com.sunzeqin.feishuadmin.pojo.cli.CliCommandResult;
 import com.sunzeqin.feishuadmin.pojo.cli.CliStepDecision;
+import com.sunzeqin.feishuadmin.service.FeishuUserScopeMappingService;
 import com.sunzeqin.feishuadmin.service.FeishuOpenApiService;
 import com.sunzeqin.feishuadmin.service.UserOAuthTokenService;
 import com.sunzeqin.feishuadmin.utils.JsonUtils;
@@ -21,6 +22,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -56,11 +59,15 @@ public class SkillCliExecutorService {
     // 用户授权服务，用来生成授权链接和判断 scope。
     private final UserOAuthTokenService userOAuthTokenService;
 
+    // 用户身份 scope 映射服务，用来按业务域生成授权 scope。
+    private final FeishuUserScopeMappingService scopeMappingService;
+
     // CLI 内部规划器使用的大模型。
     private final ChatModel chatModel;
 
     public SkillCliExecutorService(FeishuProperties properties, JsonUtils jsonUtils,
-            FeishuOpenApiService openApiService, UserOAuthTokenService userOAuthTokenService) {
+            FeishuOpenApiService openApiService, UserOAuthTokenService userOAuthTokenService,
+            FeishuUserScopeMappingService scopeMappingService) {
         // 保存飞书配置。
         this.properties = properties;
 
@@ -72,6 +79,9 @@ public class SkillCliExecutorService {
 
         // 保存用户授权服务。
         this.userOAuthTokenService = userOAuthTokenService;
+
+        // 保存用户身份 scope 映射服务。
+        this.scopeMappingService = scopeMappingService;
 
         // 创建 CLI 内部规划器模型。
         this.chatModel = buildChatModel(properties);
@@ -94,6 +104,13 @@ public class SkillCliExecutorService {
 
         // 校验业务域是否允许。
         ensureDomainAllowed(normalizedDomain);
+
+        // 用户明确要求用户身份时，执行前先检查用户 token。没有 token 就直接返回授权链接，不再让模型继续规划。
+        Map<String, Object> authorizeResult = userAuthorizeResultIfNeeded(normalizedDomain, goal,
+                sourceChatId, originalMessageId, senderOpenId, senderUserId);
+        if (!authorizeResult.isEmpty()) {
+            return authorizeResult;
+        }
 
         // 读取所有允许业务域的 Skill 文档，让复合任务可以跨域执行。
         String skillText = readAllowedSkills(normalizedDomain);
@@ -228,6 +245,53 @@ public class SkillCliExecutorService {
         return false;
     }
 
+    private Map<String, Object> userAuthorizeResultIfNeeded(String normalizedDomain, String goal, String sourceChatId,
+            String originalMessageId, String senderOpenId, String senderUserId) {
+        // 只有用户明确要求用户身份时才检查用户 token。
+        if (!explicitUserIdentityRequired(goal)) {
+            return Map.of();
+        }
+
+        // 根据当前业务域计算用户身份需要的 scope。
+        String scopeText = scopeMappingService.scopeTextForDomain(normalizedDomain);
+
+        // 打印授权 scope，方便排查为什么生成这个授权链接。
+        log.info("[阶段4 工具调用] 用户身份授权scope映射：业务域={}，scope数量={}，scope={}",
+                normalizedDomain, scopeText.split("\\s+").length, scopeText);
+
+        // 已经有可用 token 且 scope 覆盖当前业务域时继续执行。
+        UserOAuthToken token = userOAuthTokenService.findUsableTokenForCli(senderOpenId);
+        if (token != null && userOAuthTokenService.tokenHasScopes(senderOpenId, scopeText)) {
+            log.info("[阶段4 工具调用] 用户身份任务token可用：用户openId={}，过期时间={}，scope={}",
+                    senderOpenId, token.expiresAt(), token.scopeText());
+            return Map.of();
+        }
+
+        // 有 token 但 scope 不足时，也重新生成带当前业务域 scope 的授权链接。
+        if (token != null) {
+            log.info("[阶段4 工具调用] 用户身份任务token权限不足：用户openId={}，已有scope={}，需要scope={}",
+                    senderOpenId, token.scopeText(), scopeText);
+        }
+
+        // 没有 token 或 scope 不足时直接生成授权链接。
+        String authorizeUrl = buildAuthorizeUrl(sourceChatId, originalMessageId, senderOpenId, senderUserId, scopeText);
+        String reply = "需要你授权后才能以用户身份继续执行。\n\n"
+                + "授权域：" + scopeText + "\n"
+                + "授权链接：" + authorizeUrl + "\n\n"
+                + "授权完成后，系统会保存到用户表并定时刷新 token。";
+
+        // 返回授权结果，让外层直接回复给用户。
+        return Map.of(
+                "domain", normalizedDomain,
+                "goal", goal,
+                "sourceChatId", sourceChatId,
+                "requiredScopes", scopeText,
+                "authorizeUrl", authorizeUrl,
+                "finalReply", reply,
+                "observations", List.of()
+        );
+    }
+
     private ChatModel buildChatModel(FeishuProperties properties) {
         // 没开启 LLM 时不创建模型。
         if (!properties.isLlmEnabled()) {
@@ -254,6 +318,11 @@ public class SkillCliExecutorService {
             String skillText, List<CliCommandResult> observations) {
         // 把 CLI 历史执行结果转成 JSON，方便模型阅读。
         String observationText = jsonUtils.write(observations);
+
+        // 当前业务日期，专门用于“今天/明天/后天”这类相对时间换算。
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        LocalDate tomorrow = today.plusDays(1);
+        LocalDate dayAfterTomorrow = today.plusDays(2);
 
         // 返回 CLI 内部规划提示词。
         return """
@@ -310,6 +379,10 @@ public class SkillCliExecutorService {
                 23. 群聊里发送文本、Markdown、卡片时，内容开头要 @ senderOpenId 对应的人。
                 24. 如果命令支持 --message-id、--message-id-type、--receive-id 等参数，要优先用 originalMessageId 完成“引用原文回复”。
                 25. 如果用户明确要求用户身份，且 CLI 返回 missing_scope / authorization / scope 不足，不要编造成功，直接 final_answer 说明缺少 scope。
+                26. 当前业务时区固定为 Asia/Shanghai。
+                27. 当前日期是 %s；“今天”必须按 %s 计算，“明天”必须按 %s 计算，“后天”必须按 %s 计算。
+                28. 创建日程/会议时，如果用户说“下午3点”，默认是北京时间 15:00；如果没有说明时长，默认 1 小时。
+                29. 生成 --start / --end 时必须使用当前日期推导出的未来日期，不要使用历史 observations 里的旧日期。
 
                 业务域：%s
                 允许切换的业务域：%s
@@ -324,7 +397,8 @@ public class SkillCliExecutorService {
 
                 已有 CLI observations：
                 %s
-                """.formatted(domain, properties.getCliAllowedDomains(), sourceChatId,
+                """.formatted(today, today, tomorrow, dayAfterTomorrow,
+                domain, properties.getCliAllowedDomains(), sourceChatId,
                 originalMessageId, senderOpenId, senderUserId, goal, skillText, observationText);
     }
 
@@ -472,6 +546,9 @@ public class SkillCliExecutorService {
         // 业务命令默认使用 bot 身份；只有用户明确要求用户身份时，才保留 user 身份。
         normalizeIdentity(normalized, goal);
 
+        // 对今天/明天/后天这类相对日期做代码级校正，避免模型把历史日期写进日程。
+        normalizeRelativeDateArguments(normalized, goal);
+
         // 返回规范化命令。
         return normalized;
     }
@@ -555,11 +632,65 @@ public class SkillCliExecutorService {
         // 只有用户明确说要用用户/本人身份时，才允许 --as user。
         return goal.contains("用我的身份")
                 || goal.contains("以我的身份")
+                || goal.contains("用我身份")
+                || goal.contains("以我身份")
                 || goal.contains("用本人身份")
                 || goal.contains("以本人身份")
+                || goal.contains("本人身份")
                 || goal.contains("用用户身份")
                 || goal.contains("以用户身份")
                 || goal.contains("用户身份执行");
+    }
+
+    private void normalizeRelativeDateArguments(List<String> command, String goal) {
+        // 没有明确相对日期时不处理，避免误改用户指定的绝对日期。
+        LocalDate targetDate = targetDateFromGoal(goal);
+        if (targetDate == null) {
+            return;
+        }
+
+        // 只处理带 ISO 时间的参数值，例如 2025-01-16T15:00:00+08:00。
+        for (int i = 0; i < command.size(); i++) {
+            String value = command.get(i);
+            if (value == null || value.length() < 11) {
+                continue;
+            }
+
+            // 只替换日期部分，保留时间、秒和时区。
+            if (value.matches("\\d{4}-\\d{2}-\\d{2}T.*")) {
+                String oldValue = value;
+                String newValue = targetDate + value.substring(10);
+                if (!oldValue.equals(newValue)) {
+                    command.set(i, newValue);
+                    log.warn("[阶段6 CLI执行] 相对日期已校正：原值={}，新值={}，原因=用户目标包含相对日期",
+                            oldValue, newValue);
+                }
+            }
+        }
+    }
+
+    private LocalDate targetDateFromGoal(String goal) {
+        // 空目标不处理。
+        if (goal == null || goal.isBlank()) {
+            return null;
+        }
+
+        // 统一使用北京时间计算业务日期。
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+
+        // 按最常见相对日期处理。
+        if (goal.contains("后天")) {
+            return today.plusDays(2);
+        }
+        if (goal.contains("明天")) {
+            return today.plusDays(1);
+        }
+        if (goal.contains("今天")) {
+            return today;
+        }
+
+        // 没有相对日期。
+        return null;
     }
 
     private CliCommandResult executeCommand(List<String> command, String senderOpenId) {

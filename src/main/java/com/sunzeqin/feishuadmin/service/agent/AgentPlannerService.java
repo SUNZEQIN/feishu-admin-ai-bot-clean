@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -139,6 +141,11 @@ public class AgentPlannerService {
         // 把历史工具结果转成 JSON 字符串。
         String observationText = jsonUtils.write(observations);
 
+        // 当前业务日期，给模型处理“今天/明天/后天”使用。
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        LocalDate tomorrow = today.plusDays(1);
+        LocalDate dayAfterTomorrow = today.plusDays(2);
+
         // 返回完整提示词。
         return """
                 你是飞书管理员 Agent 的规划器。你只能决定下一步，不要一次性假装完成任务。
@@ -180,6 +187,8 @@ public class AgentPlannerService {
                 7. 当前群 chatId 就是本次飞书事件所在群。用户在群聊里说“本群”“当前群”“群里”“这个群”，都默认指当前群 chatId。
                 8. 不要编造用户 ID、机器人 appId、群 ID、文档 token、表格 token。缺少信息时，优先通过 cli.run_skill 让 lark-cli 查询；确实查不到时再 final_answer 说明原因。
                 9. 飞书操作默认走机器人身份。只有用户原话明确说“用我的身份”“以本人身份”“以用户身份”时，goal 里才允许写用户身份；否则不要主动要求 user 授权。
+                10. 当前业务时区固定为 Asia/Shanghai；当前日期是 %s，“今天”=%s，“明天”=%s，“后天”=%s。
+                11. 用户说“明天下午3点”时，goal 里必须保留为“明天 15:00 Asia/Shanghai”，不要把历史记忆里的旧日期写成绝对日期。
 
                 电商 MCP Skill：
                 %s
@@ -195,7 +204,8 @@ public class AgentPlannerService {
 
                 已有 observations：
                 %s
-                """.formatted(ecommerceAgentSkill, chatId,
+                """.formatted(today, today, tomorrow, dayAfterTomorrow,
+                ecommerceAgentSkill, chatId,
                 memoryText == null || memoryText.isBlank() ? "无" : memoryText,
                 userText, toolRegistry.toolDescriptions(), observationText);
     }

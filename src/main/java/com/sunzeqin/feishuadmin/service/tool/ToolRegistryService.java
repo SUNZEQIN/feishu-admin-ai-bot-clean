@@ -3,6 +3,7 @@ package com.sunzeqin.feishuadmin.service.tool;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolCall;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
 import com.sunzeqin.feishuadmin.service.EcommerceMcpClientService;
+import com.sunzeqin.feishuadmin.service.FeishuUserScopeMappingService;
 import com.sunzeqin.feishuadmin.service.cli.SkillCliExecutorService;
 import com.sunzeqin.feishuadmin.utils.LlmErrorUtils;
 import org.slf4j.Logger;
@@ -30,12 +31,19 @@ public class ToolRegistryService {
     // 电商 MCP 客户端服务，负责调用独立电商项目。
     private final EcommerceMcpClientService ecommerceMcpClient;
 
-    public ToolRegistryService(SkillCliExecutorService skillCliExecutor, EcommerceMcpClientService ecommerceMcpClient) {
+    // 飞书用户身份 scope 映射服务，负责查询业务域需要的授权范围。
+    private final FeishuUserScopeMappingService scopeMappingService;
+
+    public ToolRegistryService(SkillCliExecutorService skillCliExecutor, EcommerceMcpClientService ecommerceMcpClient,
+            FeishuUserScopeMappingService scopeMappingService) {
         // 保存 Skill + CLI 执行服务。
         this.skillCliExecutor = skillCliExecutor;
 
         // 保存电商 MCP 客户端服务。
         this.ecommerceMcpClient = ecommerceMcpClient;
+
+        // 保存用户身份 scope 映射服务。
+        this.scopeMappingService = scopeMappingService;
     }
 
     public String toolDescriptions() {
@@ -52,12 +60,18 @@ public class ToolRegistryService {
                    senderOpenId 是触发人的 open_id，群聊回复时优先 @ 这个人。
                    注意：飞书内部操作都走这个工具，不要再调用固定 OpenAPI 工具。
 
-                2. ecommerce.list_tools
+                2. feishu.scope_for_domain
+                   作用：查询某个飞书业务域在用户身份下需要申请哪些 OAuth scope。
+                   参数：domain。
+                   domain 例如 im、base、docs、calendar、vc、contact、approval、drive、wiki、minutes。
+                   用途：当用户明确要求“用本人身份 / 以用户身份”执行飞书操作时，可先查询对应模块 scope。
+
+                3. ecommerce.list_tools
                    作用：查询电商 MCP 服务可用工具。
                    参数：无。
                    用途：当用户提出电商业务需求，但你不确定具体工具名时，先调用它。
 
-                3. ecommerce.call_tool
+                4. ecommerce.call_tool
                    作用：调用电商 MCP 服务里的具体业务工具。
                    参数：toolName, arguments。
                    toolName 例如 ecommerce.query_top_products、ecommerce.query_low_inventory、ecommerce.query_customer_orders。
@@ -74,6 +88,13 @@ public class ToolRegistryService {
             // 根据工具名称分发到 Skill + CLI 飞书统一入口。
             if ("cli.run_skill".equals(call.name())) {
                 ToolResult result = runSkill(call);
+                logResult(result);
+                return result;
+            }
+
+            // 根据工具名称分发到飞书用户身份 scope 映射查询。
+            if ("feishu.scope_for_domain".equals(call.name())) {
+                ToolResult result = scopeForDomain(call);
                 logResult(result);
                 return result;
             }
@@ -168,6 +189,22 @@ public class ToolRegistryService {
 
         // 返回工具列表结果。
         return ToolResult.success(call.name(), "查询电商 MCP 工具列表成功", data);
+    }
+
+    private ToolResult scopeForDomain(ToolCall call) {
+        // 从参数里读取业务域。
+        String domain = stringParam(call, "domain");
+
+        // 业务域不能为空。
+        if (domain.isBlank()) {
+            return ToolResult.failed(call.name(), "feishu.scope_for_domain 缺少 domain 参数");
+        }
+
+        // 查询业务域对应的用户身份 scope。
+        Map<String, Object> data = scopeMappingService.scopeToolResult(domain);
+
+        // 返回查询结果。
+        return ToolResult.success(call.name(), "查询飞书用户身份scope成功", data);
     }
 
     private ToolResult callEcommerceTool(ToolCall call) {
