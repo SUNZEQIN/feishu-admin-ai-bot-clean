@@ -142,6 +142,52 @@ public class UserOAuthTokenService {
     }
 
     /**
+     * 读取给 lark-cli 使用的用户 token。
+     *
+     * <p>作用：当 CLI 需要 --as user 执行业务命令时，从数据库读取用户 access_token。
+     * 如果 token 快过期，会先尝试刷新一次。</p>
+     *
+     * @param userOpenId 用户open_id
+     * @return 可用 token；没有授权或刷新失败时返回 null
+     */
+    public UserOAuthToken findUsableTokenForCli(String userOpenId) {
+        // 没有用户 open_id 时无法定位 token。
+        if (userOpenId == null || userOpenId.isBlank()) {
+            return null;
+        }
+
+        // 读取数据库中的 token。
+        UserOAuthToken token = findToken(userOpenId);
+        if (token == null) {
+            log.info("[阶段4 工具调用] 用户token查询为空：用户openId={}", userOpenId);
+            return null;
+        }
+
+        // access_token 为空时不能给 CLI 使用。
+        if (token.accessToken() == null || token.accessToken().isBlank()) {
+            log.warn("[阶段4 工具调用] 用户token不可用：用户openId={}，原因=access_token为空", userOpenId);
+            return null;
+        }
+
+        // token 快过期时先刷新。
+        if (token.expiresAt() != null
+                && Instant.now().isAfter(token.expiresAt().minusSeconds(properties.getOauthRefreshBeforeSeconds()))) {
+            log.info("[阶段4 工具调用] 用户token即将过期，准备刷新：用户openId={}，过期时间={}",
+                    userOpenId, token.expiresAt());
+            refreshToken(token);
+            token = findToken(userOpenId);
+        }
+
+        // 刷新后仍然没有 token 时返回空。
+        if (token == null || token.accessToken() == null || token.accessToken().isBlank()) {
+            return null;
+        }
+
+        // 返回可用 token。
+        return token;
+    }
+
+    /**
      * 用授权码换用户 token 并保存。
      *
      * @param code  飞书回调 code

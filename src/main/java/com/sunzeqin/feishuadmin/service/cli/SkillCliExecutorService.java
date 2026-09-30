@@ -3,6 +3,7 @@ package com.sunzeqin.feishuadmin.service.cli;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.sunzeqin.feishuadmin.config.FeishuProperties;
 import com.sunzeqin.feishuadmin.pojo.FeishuMessageEvent;
+import com.sunzeqin.feishuadmin.pojo.UserOAuthToken;
 import com.sunzeqin.feishuadmin.pojo.cli.CliCommandResult;
 import com.sunzeqin.feishuadmin.pojo.cli.CliStepDecision;
 import com.sunzeqin.feishuadmin.service.FeishuOpenApiService;
@@ -101,7 +102,7 @@ public class SkillCliExecutorService {
         List<CliCommandResult> observations = new ArrayList<>();
 
         // 第一步固定先查当前业务域的 help，避免 LLM 直接猜命令。
-        CliCommandResult helpResult = executeCommand(List.of(properties.getCliCommand(), normalizedDomain, "--help"));
+        CliCommandResult helpResult = executeCommand(List.of(properties.getCliCommand(), normalizedDomain, "--help"), senderOpenId);
 
         // 保存 help 结果。
         observations.add(helpResult);
@@ -181,7 +182,7 @@ public class SkillCliExecutorService {
             }
 
             // 执行 CLI 命令。
-            CliCommandResult commandResult = executeCommand(command);
+            CliCommandResult commandResult = executeCommand(command, senderOpenId);
 
             // 保存执行结果。
             observations.add(commandResult);
@@ -297,7 +298,7 @@ public class SkillCliExecutorService {
                     - 多维表格 + IM：先用 base 处理表格，再用 im 把结果发给群或用户。
                 12. 不要因为当前业务域是 docs、vc、calendar、base 就拒绝执行 im/contact 等辅助命令，只要命令业务域在白名单内即可。
                 13. 如果要调用其它业务域，但还不知道命令用法，先执行该业务域的 --help 或 schema 查询。
-                14. 本项目是管理员机器人项目，所有 lark-cli 业务命令必须使用 --as bot，不要使用 --as user。
+                14. 默认优先使用 --as bot；如果命令帮助、Skill 或报错说明必须用用户身份、以本人身份、user_access_token、send_as_user，就使用 --as user。
                 15. lark-cli skills read 是只读资料查询命令，可以用来读取内置技能说明，但它不是业务执行结果。
                 16. 如果某条列表命令已经带 --page-all 并且退出码为 0，不要再用相同 page-token 重复拉取同一页；应该基于已有结果继续下一步。
                 17. 不要重复执行 observations 中已经成功执行过的完全相同命令。
@@ -325,20 +326,23 @@ public class SkillCliExecutorService {
     }
 
     private String extractMissingScopes(CliCommandResult commandResult) {
-        // 只处理失败命令。
-        if (commandResult == null || commandResult.exitCode() == 0) {
+        // 空结果直接返回。
+        if (commandResult == null) {
             return "";
         }
 
         // 合并 stdout 和 stderr。
-        String text = firstNotBlank(commandResult.stderr(), commandResult.stdout());
+        String text = safeText(commandResult.stdout()) + "\n" + safeText(commandResult.stderr());
 
         // 没有缺权限关键字时直接返回。
         String lowerText = text.toLowerCase(Locale.ROOT);
         if (!lowerText.contains("missing_scope")
                 && !lowerText.contains("missing scope")
                 && !lowerText.contains("scope")
-                && !lowerText.contains("authorization")) {
+                && !lowerText.contains("authorization")
+                && !lowerText.contains("permission")
+                && !lowerText.contains("用户尚未授权")
+                && !lowerText.contains("access_token")) {
             return "";
         }
 
@@ -452,8 +456,8 @@ public class SkillCliExecutorService {
             ensureCommandDomainAllowed(firstArg);
         }
 
-        // 管理员机器人项目统一使用 bot 身份，避免模型误选 user 导致 token_missing。
-        normalizeIdentityAsBot(normalized);
+        // 业务命令默认使用 bot 身份；如果模型明确选择 user，则保留 user 身份。
+        normalizeIdentity(normalized);
 
         // 返回规范化命令。
         return normalized;
@@ -478,7 +482,7 @@ public class SkillCliExecutorService {
                 || "||".equals(value);
     }
 
-    private void normalizeIdentityAsBot(List<String> command) {
+    private void normalizeIdentity(List<String> command) {
         // help/config/auth/skills/schema 这类命令不处理身份参数。
         if (!needTenantAccessToken(command)) {
             return;
@@ -496,8 +500,8 @@ public class SkillCliExecutorService {
                 hasAs = true;
                 if (i + 1 < command.size()) {
                     String oldValue = command.get(i + 1);
-                    if (!"bot".equals(oldValue)) {
-                        log.warn("[阶段6 CLI执行] 身份参数已修正：原身份={}，新身份=bot，原因=管理员机器人项目不使用user身份", oldValue);
+                    if (!"bot".equals(oldValue) && !"user".equals(oldValue)) {
+                        log.warn("[阶段6 CLI执行] 身份参数已修正：原身份={}，新身份=bot，原因=只允许bot或user", oldValue);
                         command.set(i + 1, "bot");
                     }
                 } else {
@@ -508,8 +512,8 @@ public class SkillCliExecutorService {
             // 处理 --as=user 这种写法。
             if (part.startsWith("--as=")) {
                 hasAs = true;
-                if (!"--as=bot".equals(part)) {
-                    log.warn("[阶段6 CLI执行] 身份参数已修正：原参数={}，新参数=--as=bot，原因=管理员机器人项目不使用user身份", part);
+                if (!"--as=bot".equals(part) && !"--as=user".equals(part)) {
+                    log.warn("[阶段6 CLI执行] 身份参数已修正：原参数={}，新参数=--as=bot，原因=只允许bot或user", part);
                     command.set(i, "--as=bot");
                 }
             }
@@ -523,16 +527,16 @@ public class SkillCliExecutorService {
         }
     }
 
-    private CliCommandResult executeCommand(List<String> command) {
+    private CliCommandResult executeCommand(List<String> command, String senderOpenId) {
         try {
-            // 执行业务 CLI 前，先获取最新 tenant_access_token，后续会显式注入到子进程环境。
-            String tenantAccessToken = prepareTenantAccessTokenForCli(command);
+            // 执行业务 CLI 前，先准备对应身份的 token，后续会显式注入到子进程环境。
+            CliTokenContext tokenContext = prepareAccessTokenForCli(command, senderOpenId);
 
             // 打印 CLI 执行入参。
             log.info("[阶段6 CLI执行] 执行命令：命令={}", command);
 
-            // 创建 CLI 进程。业务命令会使用受控环境，明确注入 bot token。
-            Process process = buildProcess(command, tenantAccessToken).start();
+            // 创建 CLI 进程。业务命令会使用受控环境，明确注入当前身份 token。
+            Process process = buildProcess(command, tokenContext).start();
 
             // 异步读取标准输出，避免输出较多时进程缓冲区写满导致卡死。
             CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(
@@ -577,20 +581,34 @@ public class SkillCliExecutorService {
         }
     }
 
-    private String prepareTenantAccessTokenForCli(List<String> command) {
+    private CliTokenContext prepareAccessTokenForCli(List<String> command, String senderOpenId) {
         // 非 lark-cli 命令不处理；正常情况下不会出现。
         if (command == null || command.isEmpty()) {
-            return "";
+            return CliTokenContext.empty();
         }
 
         // 只处理配置里的 lark-cli 命令。
         if (!properties.getCliCommand().equals(command.get(0))) {
-            return "";
+            return CliTokenContext.empty();
         }
 
         // config/auth/help/schema/skills 这类命令不需要 bot token，避免无意义写入。
         if (!needTenantAccessToken(command)) {
-            return "";
+            return CliTokenContext.empty();
+        }
+
+        // 读取命令身份。
+        String identity = commandIdentity(command);
+
+        // 用户身份命令读取数据库里的用户 access_token。
+        if ("user".equals(identity)) {
+            UserOAuthToken token = userOAuthTokenService.findUsableTokenForCli(senderOpenId);
+            if (token == null) {
+                throw new IllegalStateException("用户尚未授权或用户token不可用，请先完成用户授权");
+            }
+            log.info("[阶段6 CLI执行] 用户token准备完成：用户openId={}，过期时间={}，scope={}",
+                    senderOpenId, token.expiresAt(), token.scopeText());
+            return new CliTokenContext("user", token.accessToken());
         }
 
         // appId 不能为空，否则 lark-cli 不知道 token 属于哪个应用。
@@ -608,7 +626,38 @@ public class SkillCliExecutorService {
         setTenantAccessToken(token);
 
         // 返回 token，后续会直接注入到业务命令环境变量里，避免 lark-cli 找不到 bot token。
-        return token;
+        return new CliTokenContext("bot", token);
+    }
+
+    private String commandIdentity(List<String> command) {
+        // 默认使用 bot。
+        String identity = "bot";
+
+        // 空命令返回默认身份。
+        if (command == null) {
+            return identity;
+        }
+
+        // 遍历命令参数。
+        for (int i = 0; i < command.size(); i++) {
+            String part = command.get(i);
+
+            // 处理 --as user。
+            if ("--as".equals(part) && i + 1 < command.size()) {
+                identity = command.get(i + 1);
+            }
+
+            // 处理 --as=user。
+            if (part != null && part.startsWith("--as=")) {
+                identity = part.substring("--as=".length());
+            }
+        }
+
+        // 只允许 bot / user。
+        if (!"user".equals(identity)) {
+            return "bot";
+        }
+        return "user";
     }
 
     private boolean needTenantAccessToken(List<String> command) {
@@ -696,7 +745,7 @@ public class SkillCliExecutorService {
         }
     }
 
-    private ProcessBuilder buildProcess(List<String> command, String tenantAccessToken) {
+    private ProcessBuilder buildProcess(List<String> command, CliTokenContext tokenContext) {
         // 创建普通进程构造器。
         ProcessBuilder processBuilder = new ProcessBuilder(command);
 
@@ -714,14 +763,24 @@ public class SkillCliExecutorService {
         // 传入应用密钥。这里不打印密钥，只给 lark-cli 子进程使用。
         environment.put("LARKSUITE_CLI_APP_SECRET", properties.getAppSecret());
 
-        // 直接传入本次 Java 获取到的 tenant_access_token，避免 lark-cli 读取 token store 失败。
-        environment.put("LARKSUITE_CLI_TENANT_ACCESS_TOKEN", tenantAccessToken);
+        // 根据命令身份注入 token。
+        if ("user".equals(tokenContext.identity())) {
+            // 直接传入本次数据库读取到的 user_access_token，避免 lark-cli 读取 token store 失败。
+            environment.put("LARKSUITE_CLI_USER_ACCESS_TOKEN", tokenContext.accessToken());
+            environment.put("LARKSUITE_CLI_ACCESS_TOKEN", tokenContext.accessToken());
+            environment.remove("LARKSUITE_CLI_TENANT_ACCESS_TOKEN");
+        } else {
+            // 直接传入本次 Java 获取到的 tenant_access_token，避免 lark-cli 读取 token store 失败。
+            environment.put("LARKSUITE_CLI_TENANT_ACCESS_TOKEN", tokenContext.accessToken());
+            environment.remove("LARKSUITE_CLI_USER_ACCESS_TOKEN");
+            environment.remove("LARKSUITE_CLI_ACCESS_TOKEN");
+        }
 
-        // 管理员机器人项目统一使用 bot 身份。
-        environment.put("LARKSUITE_CLI_DEFAULT_AS", "bot");
+        // 设置当前命令默认身份。
+        environment.put("LARKSUITE_CLI_DEFAULT_AS", tokenContext.identity());
 
-        // 强制只允许 bot 身份，避免 CLI 在 user/bot 之间自动切换。
-        environment.put("LARKSUITE_CLI_STRICT_MODE", "bot");
+        // 强制只允许当前身份，避免 CLI 在 user/bot 之间自动切换。
+        environment.put("LARKSUITE_CLI_STRICT_MODE", tokenContext.identity());
 
         // 不使用 credential-store 作为 token 来源，优先使用本次注入的环境变量 token。
         environment.remove("LARKSUITE_CLI_TENANT_ACCESS_TOKEN_SOURCE");
@@ -730,11 +789,25 @@ public class SkillCliExecutorService {
         environment.put("LARKSUITE_CLI_NO_UPDATE_NOTIFIER", "1");
 
         // 打印受控环境说明，不打印密钥和 token。
-        log.info("[阶段6 CLI执行] 业务命令环境已调整：appId={}，默认身份=bot，已注入tenant_access_token，已启用bot严格模式",
-                properties.getAppId());
+        log.info("[阶段6 CLI执行] 业务命令环境已调整：appId={}，默认身份={}，已注入对应身份token，已启用严格模式",
+                properties.getAppId(), tokenContext.identity());
 
         // 返回处理后的进程构造器。
         return processBuilder;
+    }
+
+    /**
+     * CLI token 上下文。
+     *
+     * @param identity    当前命令身份
+     * @param accessToken 当前身份 token
+     *
+     * @author sunzeqin
+     */
+    private record CliTokenContext(String identity, String accessToken) {
+        private static CliTokenContext empty() {
+            return new CliTokenContext("", "");
+        }
     }
 
     private String readStream(InputStream inputStream) {
@@ -878,6 +951,16 @@ public class SkillCliExecutorService {
 
         // 返回字符串长度。
         return text.length();
+    }
+
+    private String safeText(String text) {
+        // 空文本统一转为空字符串，避免拼接错误信息时出现 null。
+        if (text == null) {
+            return "";
+        }
+
+        // 返回原文本。
+        return text;
     }
 
     private String firstLine(String text) {

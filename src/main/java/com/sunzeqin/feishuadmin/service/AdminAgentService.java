@@ -75,9 +75,10 @@ public class AdminAgentService {
             // 交给 Agent 编排器执行多步循环。
             AgentRunResult result = orchestrator.run(event);
 
-            // 如果工具已经用飞书卡片或飞书消息把结果发出，这里不再追加文本总结，避免重复刷屏。
+            // 如果工具已经用飞书卡片或飞书消息把结果发出，这里只追加一条简短确认，避免用户不知道已经成功。
             if (cardOrMessageAlreadySent(result)) {
-                log.info("[阶段8 回复飞书] 跳过文本总结：消息ID={}，原因=工具已发送卡片或消息", event.messageId());
+                log.info("[阶段8 回复飞书] 卡片或消息已发送，准备回复简短确认：消息ID={}", event.messageId());
+                safeReplyToSender(event, cardOrMessageSentReply(result));
                 return;
             }
 
@@ -224,6 +225,19 @@ public class AdminAgentService {
         boolean containsCard = reply.contains("飞书卡片") || reply.contains("卡片");
 
         return containsSuccess && containsSentMessage && containsCard;
+    }
+
+    private String cardOrMessageSentReply(AgentRunResult result) {
+        // 工具已经发送卡片或消息时，不再复述正文，只告诉用户真实发送成功。
+        String reply = result == null ? "" : result.reply();
+
+        // 能识别到私聊时，提示用户去对应私聊查看。
+        if (reply.contains("私聊") || reply.contains("测试账号") || reply.contains("同学")) {
+            return "✅ 飞书卡片已发送成功，请到对应私聊查看。";
+        }
+
+        // 默认确认发送成功。
+        return "✅ 飞书卡片已发送成功。";
     }
 
     private String cleanReplyText(String text) {

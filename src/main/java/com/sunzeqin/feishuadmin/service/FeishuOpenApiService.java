@@ -143,8 +143,8 @@ public class FeishuOpenApiService {
             return;
         }
 
-        // 组装添加表情请求体。
-        Map<String, Object> body = Map.of("reaction_type", reactionType);
+        // 组装添加表情请求体。飞书接口要求 reaction_type 是对象，里面放 emoji_type。
+        Map<String, Object> body = Map.of("reaction_type", Map.of("emoji_type", reactionType));
 
         // 打印请求摘要。
         log.info("[阶段2 回复处理中] 添加消息表情请求：消息ID={}，表情={}", messageId, reactionType);
