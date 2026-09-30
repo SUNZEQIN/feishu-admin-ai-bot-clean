@@ -171,9 +171,11 @@ public class AdminAgentService {
 
             // 用二维码图片回复原消息。
             openApi.replyImage(event.messageId(), imageKey);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // 二维码发送失败时不回退明文链接，避免再次触发链接截断。
-            log.error("[阶段8 回复飞书] 授权二维码发送失败：消息ID={}，错误={}", event.messageId(), e.getMessage(), e);
+            // 这里捕获 Throwable，是为了接住 NoClassDefFoundError 这类依赖缺失错误，避免异步线程静默炸掉。
+            log.error("[阶段8 回复飞书] 授权二维码发送失败：消息ID={}，错误类型={}，错误={}",
+                    event.messageId(), e.getClass().getSimpleName(), e.getMessage(), e);
             safeReplyToSender(event, "⚠️ 授权二维码发送失败，请管理员按消息 ID 查看服务日志：" + event.messageId());
         }
     }
