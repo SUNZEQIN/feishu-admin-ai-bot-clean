@@ -82,8 +82,10 @@ public class FeishuOpenApiService {
             }
 
             // 打印查询用户可用应用列表的真实飞书请求入参。
-            log.info("飞书接口请求：方法=GET，接口=/open-apis/application/v1/user/visible_apps，用户openId={}，分页大小={}，分页标记={}，请求地址={}",
+            log.info("[阶段4 工具调用] 飞书接口请求：方法=GET，接口=/open-apis/application/v1/user/visible_apps，用户openId={}，分页大小={}，分页标记={}",
                     openId, 50, currentPageToken, requestUri);
+            log.debug("[阶段4 工具调用] 飞书接口完整请求地址：方法=GET，接口=/open-apis/application/v1/user/visible_apps，地址={}",
+                    requestUri);
 
             // 调用飞书查询用户可用应用接口。
             JsonNode response = restClient.get()
@@ -95,12 +97,14 @@ public class FeishuOpenApiService {
             // 打印查询用户可用应用列表的飞书响应摘要。
             JsonNode appItems = applicationItems(response.path("data"));
 
-            log.info("飞书接口响应：方法=GET，接口=/open-apis/application/v1/user/visible_apps，状态码={}，消息={}，应用数量={}，是否还有下一页={}，下一页标记={}",
+            log.info("[阶段4 工具调用] 飞书接口响应摘要：方法=GET，接口=/open-apis/application/v1/user/visible_apps，状态码={}，消息={}，应用数量={}，是否还有下一页={}，下一页标记={}",
                     response.path("code").asInt(-1),
                     response.path("msg").asText(""),
                     appItems.size(),
                     response.path("data").path("has_more").asBoolean(false),
                     response.path("data").path("page_token").asText(""));
+            log.debug("[阶段4 工具调用] 飞书接口完整响应：方法=GET，接口=/open-apis/application/v1/user/visible_apps，响应={}",
+                    response);
 
             // 检查飞书返回 code 是否为 0，不为 0 就抛异常。
             ensureOk(response, "查询用户可用应用失败");
@@ -175,8 +179,10 @@ public class FeishuOpenApiService {
             }
 
             // 打印查询群成员的真实飞书请求入参。
-            log.info("飞书接口请求：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，群ID={}，成员ID类型={}，分页大小={}，分页标记={}，请求地址={}",
-                    chatId, memberIdType, 100, currentPageToken, requestUri);
+            log.info("[阶段4 工具调用] 飞书接口请求：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，群ID={}，成员ID类型={}，分页大小={}，分页标记={}",
+                    chatId, memberIdType, 100, currentPageToken);
+            log.debug("[阶段4 工具调用] 飞书接口完整请求地址：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，地址={}",
+                    requestUri);
 
             // 调用飞书查询群成员接口。
             JsonNode response = restClient.get()
@@ -186,12 +192,14 @@ public class FeishuOpenApiService {
                     .body(JsonNode.class);
 
             // 打印查询群成员的飞书响应摘要。
-            log.info("飞书接口响应：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，状态码={}，消息={}，成员数量={}，是否还有下一页={}，下一页标记={}",
+            log.info("[阶段4 工具调用] 飞书接口响应摘要：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，状态码={}，消息={}，成员数量={}，是否还有下一页={}，下一页标记={}",
                     response.path("code").asInt(-1),
                     response.path("msg").asText(""),
                     response.path("data").path("items").size(),
                     response.path("data").path("has_more").asBoolean(false),
                     response.path("data").path("page_token").asText(""));
+            log.debug("[阶段4 工具调用] 飞书接口完整响应：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，响应={}",
+                    response);
 
             // 检查飞书返回 code 是否为 0，不为 0 就抛异常。
             ensureOk(response, "查询群成员失败");
@@ -234,11 +242,13 @@ public class FeishuOpenApiService {
                 "bot_id_list", botAppIds);
 
         // 打印建群入参，方便排查实际传给飞书的用户和机器人 ID。
-        log.info("飞书建群入参：群名={}，用户openId列表={}，机器人appId列表={}，请求体={}",
+        log.info("[阶段4 工具调用] 飞书建群入参：群名={}，用户openId数量={}，机器人appId数量={}",
+                chatName, userOpenIds.size(), botAppIds.size());
+        log.debug("[阶段4 工具调用] 飞书建群完整入参：群名={}，用户openId列表={}，机器人appId列表={}，请求体={}",
                 chatName, userOpenIds, botAppIds, body);
 
         // 打印创建群聊的真实飞书请求入参。
-        log.info("飞书接口请求：方法=POST，接口=/open-apis/im/v1/chats，查询参数=user_id_type=open_id,set_bot_manager=true，请求体={}",
+        log.info("[阶段4 工具调用] 飞书接口请求：方法=POST，接口=/open-apis/im/v1/chats，查询参数=user_id_type=open_id,set_bot_manager=true，请求体摘要={}",
                 body);
 
         // 调用飞书创建群聊接口。
@@ -254,10 +264,11 @@ public class FeishuOpenApiService {
                 .body(JsonNode.class);
 
         // 打印创建群聊的飞书响应摘要。
-        log.info("飞书接口响应：方法=POST，接口=/open-apis/im/v1/chats，状态码={}，消息={}，数据={}",
+        log.info("[阶段4 工具调用] 飞书接口响应摘要：方法=POST，接口=/open-apis/im/v1/chats，状态码={}，消息={}，是否有数据={}",
                 response.path("code").asInt(-1),
                 response.path("msg").asText(""),
-                response.path("data"));
+                !response.path("data").isMissingNode());
+        log.debug("[阶段4 工具调用] 飞书接口完整响应：方法=POST，接口=/open-apis/im/v1/chats，响应={}", response);
 
         // 检查飞书返回 code 是否为 0。
         ensureOk(response, "创建群聊失败");
@@ -267,7 +278,7 @@ public class FeishuOpenApiService {
                 .asText(response.path("data").path("chat_id").asText(""));
 
         // 打印建群成功日志，方便用 chat_id 继续排查。
-        log.info("飞书建群成功：群名={}，新群会话ID={}", chatName, chatId);
+        log.info("[阶段4 工具调用] 飞书建群成功：群名={}，新群会话ID={}", chatName, chatId);
 
         // 返回新群 chat_id。
         return chatId;
@@ -284,7 +295,8 @@ public class FeishuOpenApiService {
         Map<String, Object> body = Map.of("msg_type", "text", "content", jsonUtils.write(Map.of("text", text)));
 
         // 打印回复消息的真实飞书请求入参。
-        log.info("飞书接口请求：方法=POST，接口=/open-apis/im/v1/messages/{messageId}/reply，消息ID={}，请求体={}",
+        log.info("[阶段8 回复飞书] 飞书回复请求：消息ID={}，回复长度={}", messageId, text == null ? 0 : text.length());
+        log.debug("[阶段8 回复飞书] 飞书回复完整请求：方法=POST，接口=/open-apis/im/v1/messages/{messageId}/reply，消息ID={}，请求体={}",
                 messageId, body);
 
         // 调用飞书“回复消息”接口，把处理结果回复到原消息下。
@@ -297,11 +309,12 @@ public class FeishuOpenApiService {
                 .body(JsonNode.class);
 
         // 打印回复消息的飞书响应摘要。
-        log.info("飞书接口响应：方法=POST，接口=/open-apis/im/v1/messages/{messageId}/reply，消息ID={}，状态码={}，消息={}，数据={}",
+        log.info("[阶段8 回复飞书] 飞书回复响应摘要：消息ID={}，状态码={}，消息={}，新消息ID={}",
                 messageId,
                 response.path("code").asInt(-1),
                 response.path("msg").asText(""),
-                response.path("data"));
+                response.path("data").path("message_id").asText(""));
+        log.debug("[阶段8 回复飞书] 飞书回复完整响应：消息ID={}，响应={}", messageId, response);
     }
 
     /**
@@ -320,12 +333,12 @@ public class FeishuOpenApiService {
         // 如果 token 已存在且距离过期还有 60 秒以上，就直接复用缓存。
         if (!tenantAccessToken.isBlank() && Instant.now().isBefore(tokenExpiresAt.minusSeconds(60))) {
             // 打印 token 缓存命中日志，不打印 token 明文。
-            log.info("飞书token缓存命中：过期时间={}", tokenExpiresAt);
+            log.info("[阶段4 工具调用] 飞书token缓存命中：过期时间={}", tokenExpiresAt);
             return tenantAccessToken;
         }
 
         // 打印获取 token 请求日志，只打印 appId，不打印 appSecret。
-        log.info("飞书接口请求：方法=POST，接口=/open-apis/auth/v3/tenant_access_token/internal，appId={}，appSecret是否已配置={}",
+        log.info("[阶段4 工具调用] 飞书接口请求：方法=POST，接口=/open-apis/auth/v3/tenant_access_token/internal，appId={}，appSecret是否已配置={}",
                 properties.getAppId(), properties.getAppSecret() != null && !properties.getAppSecret().isBlank());
 
         // token 不存在或快过期时，调用飞书接口重新获取 tenant_access_token。
@@ -337,10 +350,11 @@ public class FeishuOpenApiService {
                 .body(JsonNode.class);
 
         // 打印获取 token 响应摘要，不打印 token 明文。
-        log.info("飞书接口响应：方法=POST，接口=/open-apis/auth/v3/tenant_access_token/internal，状态码={}，消息={}，有效期秒数={}",
+        log.info("[阶段4 工具调用] 飞书接口响应摘要：方法=POST，接口=/open-apis/auth/v3/tenant_access_token/internal，状态码={}，消息={}，有效期秒数={}",
                 response.path("code").asInt(-1),
                 response.path("msg").asText(""),
                 response.path("expire").asLong(0));
+        // token 接口响应里包含 tenant_access_token，不能在 DEBUG 里打印完整响应。
 
         // 检查获取 token 的返回结果。
         ensureOk(response, "获取 tenant_access_token 失败");

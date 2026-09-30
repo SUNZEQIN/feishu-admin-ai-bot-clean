@@ -6,6 +6,7 @@ import com.sunzeqin.feishuadmin.pojo.cli.CliCommandResult;
 import com.sunzeqin.feishuadmin.pojo.cli.CliStepDecision;
 import com.sunzeqin.feishuadmin.service.FeishuOpenApiService;
 import com.sunzeqin.feishuadmin.utils.JsonUtils;
+import com.sunzeqin.feishuadmin.utils.LlmErrorUtils;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.slf4j.Logger;
@@ -99,7 +100,7 @@ public class SkillCliExecutorService {
         }
 
         // 打印 Skill + CLI 开始日志。
-        log.info("SkillCLI开始：业务域={}，目标={}，来源群ID={}，最大步骤数={}",
+        log.info("[阶段5 SkillCLI规划] 开始：业务域={}，目标={}，来源群ID={}，最大步骤数={}",
                 normalizedDomain, goal, sourceChatId, properties.getCliMaxSteps());
 
         // 循环执行 CLI 内部规划。
@@ -108,21 +109,40 @@ public class SkillCliExecutorService {
             String prompt = buildPrompt(normalizedDomain, goal, sourceChatId, skillText, observations);
 
             // 打印规划输入摘要。
-            log.info("SkillCLI规划输入：业务域={}，步骤={}，观察结果数量={}",
+            log.info("[阶段5 SkillCLI规划] 规划输入：业务域={}，步骤={}，观察结果数量={}",
                     normalizedDomain, step, observations.size());
 
             // 调用模型规划下一条 CLI 命令或最终回复。
-            String answer = chatModel.chat(prompt);
+            String answer;
+            try {
+                answer = chatModel.chat(prompt);
+            } catch (Exception e) {
+                // 大模型余额不足时，直接把明确提示返回给外层工具。
+                if (LlmErrorUtils.insufficientBalance(e)) {
+                    log.warn("[阶段5 SkillCLI规划] 规划失败：业务域={}，步骤={}，原因=大模型余额不足", normalizedDomain, step);
+                    return Map.of(
+                            "domain", normalizedDomain,
+                            "goal", goal,
+                            "sourceChatId", sourceChatId,
+                            "finalReply", LlmErrorUtils.insufficientBalanceReply(),
+                            "observations", observations
+                    );
+                }
+
+                // 其它异常继续抛出，由工具注册表转成失败结果。
+                throw e;
+            }
 
             // 打印模型原始输出。
-            log.info("SkillCLI模型原始输出：业务域={}，步骤={}，模型输出={}", normalizedDomain, step, answer);
+            log.debug("[阶段5 SkillCLI规划] 模型原始输出：业务域={}，步骤={}，模型输出={}", normalizedDomain, step, answer);
 
             // 解析模型决策。
             CliStepDecision decision = parseDecision(answer);
 
             // 打印模型决策。
-            log.info("SkillCLI规划结果：业务域={}，步骤={}，类型={}，原因={}，命令={}，最终回复={}",
-                    normalizedDomain, step, decision.type(), decision.reason(), decision.command(), decision.finalReply());
+            log.info("[阶段5 SkillCLI规划] 规划结果：业务域={}，步骤={}，类型={}，原因={}，命令={}，最终回复长度={}",
+                    normalizedDomain, step, decision.type(), decision.reason(), decision.command(),
+                    decision.finalReply() == null ? 0 : decision.finalReply().length());
 
             // 如果模型认为已经完成，就返回成功结果。
             if (!decision.commandDecision()) {
@@ -141,7 +161,7 @@ public class SkillCliExecutorService {
             // 如果模型重复执行已经成功过的相同命令，跳过真实调用，避免浪费步骤和重复请求飞书。
             if (hasSuccessfulCommand(observations, command)) {
                 String message = "重复命令已跳过，请基于已有成功结果继续下一步：" + String.join(" ", command);
-                log.warn("SkillCLI重复命令已跳过：业务域={}，步骤={}，命令={}", normalizedDomain, step, command);
+                log.warn("[阶段5 SkillCLI规划] 重复命令已跳过：业务域={}，步骤={}，命令={}", normalizedDomain, step, command);
                 observations.add(new CliCommandResult(String.join(" ", command), 0, message, ""));
                 continue;
             }
@@ -351,7 +371,7 @@ public class SkillCliExecutorService {
                 if (i + 1 < command.size()) {
                     String oldValue = command.get(i + 1);
                     if (!"bot".equals(oldValue)) {
-                        log.warn("SkillCLI身份参数已修正：原身份={}，新身份=bot，原因=管理员机器人项目不使用user身份", oldValue);
+                        log.warn("[阶段6 CLI执行] 身份参数已修正：原身份={}，新身份=bot，原因=管理员机器人项目不使用user身份", oldValue);
                         command.set(i + 1, "bot");
                     }
                 } else {
@@ -363,7 +383,7 @@ public class SkillCliExecutorService {
             if (part.startsWith("--as=")) {
                 hasAs = true;
                 if (!"--as=bot".equals(part)) {
-                    log.warn("SkillCLI身份参数已修正：原参数={}，新参数=--as=bot，原因=管理员机器人项目不使用user身份", part);
+                    log.warn("[阶段6 CLI执行] 身份参数已修正：原参数={}，新参数=--as=bot，原因=管理员机器人项目不使用user身份", part);
                     command.set(i, "--as=bot");
                 }
             }
@@ -373,7 +393,7 @@ public class SkillCliExecutorService {
         if (!hasAs) {
             command.add("--as");
             command.add("bot");
-            log.info("SkillCLI身份参数已补充：身份=bot，原因=管理员机器人项目默认使用bot身份");
+            log.info("[阶段6 CLI执行] 身份参数已补充：身份=bot，原因=管理员机器人项目默认使用bot身份");
         }
     }
 
@@ -383,7 +403,7 @@ public class SkillCliExecutorService {
             String tenantAccessToken = prepareTenantAccessTokenForCli(command);
 
             // 打印 CLI 执行入参。
-            log.info("SkillCLI执行命令：命令={}", command);
+            log.info("[阶段6 CLI执行] 执行命令：命令={}", command);
 
             // 创建 CLI 进程。业务命令会使用受控环境，明确注入 bot token。
             Process process = buildProcess(command, tenantAccessToken).start();
@@ -415,14 +435,16 @@ public class SkillCliExecutorService {
             int exitCode = process.exitValue();
 
             // 打印 CLI 执行结果。
-            log.info("SkillCLI命令结果：命令={}，退出码={}，标准输出={}，错误输出={}",
-                    command, exitCode, truncate(stdout), truncate(stderr));
+            log.info("[阶段7 CLI结果] 命令结果摘要：命令={}，退出码={}，标准输出长度={}，错误输出长度={}，标准输出摘要={}，错误输出摘要={}",
+                    command, exitCode, length(stdout), length(stderr), firstLine(stdout), firstLine(stderr));
+            log.debug("[阶段7 CLI结果] 命令原始输出：命令={}，退出码={}，标准输出={}，错误输出={}",
+                    command, exitCode, stdout, stderr);
 
             // 返回 CLI 执行结果。
             return new CliCommandResult(String.join(" ", command), exitCode, stdout, stderr);
         } catch (Exception e) {
             // 打印 CLI 执行异常。
-            log.warn("SkillCLI命令异常：命令={}，错误={}", command, e.getMessage());
+            log.warn("[阶段7 CLI结果] 命令异常：命令={}，错误={}", command, e.getMessage());
 
             // 返回失败结果。
             return new CliCommandResult(String.join(" ", command), -1, "", e.getMessage());
@@ -503,9 +525,9 @@ public class SkillCliExecutorService {
 
         try {
             // 打印写入动作，不打印 token 明文。
-            log.info("SkillCLI写入tenant_access_token：appId={}，命令={}", properties.getAppId(), command);
+            log.info("[阶段6 CLI执行] 写入tenant_access_token：appId={}，命令={}", properties.getAppId(), command);
 
-            // 创建写入 token 的进程。这里保留原环境，因为当前写入动作已经能成功执行。
+            // 创建写入 token 的进程。
             Process process = new ProcessBuilder(command).start();
 
             // 通过 stdin 写入 token。
@@ -541,7 +563,7 @@ public class SkillCliExecutorService {
             }
 
             // 打印写入成功日志，不打印 token。
-            log.info("SkillCLI写入tenant_access_token成功：appId={}，退出码={}", properties.getAppId(), exitCode);
+            log.info("[阶段6 CLI执行] 写入tenant_access_token成功：appId={}，退出码={}", properties.getAppId(), exitCode);
         } catch (Exception e) {
             // 写入 token 失败时抛出异常。
             throw new IllegalStateException("写入 lark-cli tenant_access_token 异常：" + e.getMessage(), e);
@@ -560,7 +582,7 @@ public class SkillCliExecutorService {
         // 读取当前进程环境变量。
         Map<String, String> environment = processBuilder.environment();
 
-        // 明确告诉 lark-cli 当前应用 ID，方便它定位刚写入的 tenant_access_token。
+        // 明确告诉 lark-cli 当前应用 ID，方便它定位当前应用。
         environment.put("LARKSUITE_CLI_APP_ID", properties.getAppId());
 
         // 传入应用密钥。这里不打印密钥，只给 lark-cli 子进程使用。
@@ -582,7 +604,7 @@ public class SkillCliExecutorService {
         environment.put("LARKSUITE_CLI_NO_UPDATE_NOTIFIER", "1");
 
         // 打印受控环境说明，不打印密钥和 token。
-        log.info("SkillCLI业务命令环境已调整：appId={}，默认身份=bot，已注入tenant_access_token，已启用bot严格模式",
+        log.info("[阶段6 CLI执行] 业务命令环境已调整：appId={}，默认身份=bot，已注入tenant_access_token，已启用bot严格模式",
                 properties.getAppId());
 
         // 返回处理后的进程构造器。
@@ -720,6 +742,27 @@ public class SkillCliExecutorService {
 
         // 返回截断文本。
         return text.substring(0, 2000) + "...";
+    }
+
+    private int length(String text) {
+        // 空文本长度按 0 处理。
+        if (text == null) {
+            return 0;
+        }
+
+        // 返回字符串长度。
+        return text.length();
+    }
+
+    private String firstLine(String text) {
+        // 空文本直接返回空字符串。
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+
+        // 只取第一行作为 INFO 摘要，完整输出放 DEBUG。
+        String[] lines = text.strip().split("\\R", 2);
+        return truncate(lines[0]);
     }
 
     private String firstNotBlank(String first, String second) {

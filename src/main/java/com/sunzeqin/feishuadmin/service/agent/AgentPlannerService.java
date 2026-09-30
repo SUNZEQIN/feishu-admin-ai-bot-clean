@@ -7,6 +7,7 @@ import com.sunzeqin.feishuadmin.pojo.tool.ToolCall;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
 import com.sunzeqin.feishuadmin.service.tool.ToolRegistryService;
 import com.sunzeqin.feishuadmin.utils.JsonUtils;
+import com.sunzeqin.feishuadmin.utils.LlmErrorUtils;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.slf4j.Logger;
@@ -67,20 +68,33 @@ public class AgentPlannerService {
         String prompt = buildPrompt(userText, chatId, memoryText, observations);
 
         // 打印规划输入摘要，排查提示词和 observation 数量。
-        log.info("智能体规划输入：消息ID={}，步骤={}，会话ID={}，观察结果数量={}，用户文本={}",
+        log.info("[阶段3 外层Agent规划] 规划输入：消息ID={}，步骤={}，会话ID={}，观察结果数量={}，用户文本={}",
                 messageId, step, chatId, observations.size(), userText);
 
         // 调用模型。
-        String answer = chatModel.chat(prompt);
+        String answer;
+        try {
+            answer = chatModel.chat(prompt);
+        } catch (Exception e) {
+            // 大模型余额不足时，直接返回用户能看懂的中文提示。
+            if (LlmErrorUtils.insufficientBalance(e)) {
+                log.warn("[阶段3 外层Agent规划] 规划失败：消息ID={}，步骤={}，原因=大模型余额不足", messageId, step);
+                return new AgentDecision("final_answer", "大模型余额不足", null,
+                        LlmErrorUtils.insufficientBalanceReply());
+            }
+
+            // 其它异常继续抛出，由上层统一处理。
+            throw e;
+        }
 
         // 打印模型原始输出，方便排查 JSON 格式问题。
-        log.info("智能体模型原始输出：消息ID={}，步骤={}，模型输出={}", messageId, step, answer);
+        log.debug("[阶段3 外层Agent规划] 模型原始输出：消息ID={}，步骤={}，模型输出={}", messageId, step, answer);
 
         // 解析模型决策。
         AgentDecision decision = parseDecision(answer);
 
         // 打印决策日志，方便排查模型下一步要做什么。
-        log.info("智能体规划结果：消息ID={}，步骤={}，决策类型={}，工具={}，原因={}",
+        log.info("[阶段3 外层Agent规划] 规划结果：消息ID={}，步骤={}，决策类型={}，工具={}，原因={}",
                 messageId,
                 step,
                 decision.type(),
@@ -99,7 +113,7 @@ public class AgentPlannerService {
 
         // 没配置 API Key 时不创建模型。
         if (properties.getLlmApiKey() == null || properties.getLlmApiKey().isBlank()) {
-            log.warn("智能体大模型未启用：原因=API Key为空");
+            log.warn("[阶段3 外层Agent规划] 大模型未启用：原因=API Key为空");
             return null;
         }
 

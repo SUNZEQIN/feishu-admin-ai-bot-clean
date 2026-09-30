@@ -72,16 +72,20 @@ public class FeishuEventController {
         if (event != null) {
             // 同一个 message_id 如果已经处理过，直接忽略，避免重复回复。
             if (!dedupService.firstSeen(event.messageId())) {
-                log.info("飞书事件重复推送已忽略：消息ID={}", event.messageId());
+                log.info("[阶段1 接收飞书事件] 重复推送已忽略：消息ID={}", event.messageId());
                 return ResponseEntity.ok(Map.of("ok", true, "duplicated", true));
             }
+
+            // 打印入口摘要，后续所有日志都可以用 messageId 串起来。
+            log.info("[阶段1 接收飞书事件] 收到消息：消息ID={}，会话ID={}，会话类型={}，发送人openId={}，文本={}",
+                    event.messageId(), event.chatId(), event.chatType(), event.openId(), event.text());
 
             // 后台异步处理消息，当前回调立即返回 200 给飞书，避免飞书超时重试。
             agentService.handleMessageAsync(event);
         } else {
             // 如果不是当前系统关心的事件，只记录日志，不抛异常，避免飞书反复重试。
             String eventType = root.path("header").path("event_type").asText("");
-            log.info("飞书事件已忽略：事件类型={}", eventType);
+            log.info("[阶段1 接收飞书事件] 非目标事件已忽略：事件类型={}", eventType);
         }
 
         // 飞书事件回调需要快速返回成功，具体业务在服务里处理。

@@ -14,6 +14,7 @@ com\sunzeqin\feishuadmin\service\MessageDedupService.class
 com\sunzeqin\feishuadmin\pojo\UrlVerificationResponse.class
 com\sunzeqin\feishuadmin\controller\FeishuEventController.class
 com\sunzeqin\feishuadmin\pojo\tool\ToolCall.class
+com\sunzeqin\feishuadmin\utils\LlmErrorUtils.class
 com\sunzeqin\feishuadmin\service\ConversationMemoryService.class
 com\sunzeqin\feishuadmin\controller\HealthController.class
 com\sunzeqin\feishuadmin\pojo\FeishuMessageEvent.class
