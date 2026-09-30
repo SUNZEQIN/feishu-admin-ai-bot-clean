@@ -357,8 +357,8 @@ public class SkillCliExecutorService {
             // 打印 CLI 执行入参。
             log.info("SkillCLI执行命令：命令={}", command);
 
-            // 创建进程。
-            Process process = new ProcessBuilder(command).start();
+            // 创建 CLI 进程。业务命令会使用受控环境，避免外部凭据模式覆盖本地 token store。
+            Process process = buildProcess(command).start();
 
             // 异步读取标准输出，避免输出较多时进程缓冲区写满导致卡死。
             CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(
@@ -474,7 +474,7 @@ public class SkillCliExecutorService {
             // 打印写入动作，不打印 token 明文。
             log.info("SkillCLI写入tenant_access_token：appId={}，命令={}", properties.getAppId(), command);
 
-            // 创建写入 token 的进程。
+            // 创建写入 token 的进程。这里保留原环境，因为当前写入动作已经能成功执行。
             Process process = new ProcessBuilder(command).start();
 
             // 通过 stdin 写入 token。
@@ -515,6 +515,35 @@ public class SkillCliExecutorService {
             // 写入 token 失败时抛出异常。
             throw new IllegalStateException("写入 lark-cli tenant_access_token 异常：" + e.getMessage(), e);
         }
+    }
+
+    private ProcessBuilder buildProcess(List<String> command) {
+        // 创建普通进程构造器。
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+
+        // 只有真实业务命令才调整环境变量；help/config/auth 不动，避免影响诊断命令。
+        if (!needTenantAccessToken(command)) {
+            return processBuilder;
+        }
+
+        // 读取当前进程环境变量。
+        Map<String, String> environment = processBuilder.environment();
+
+        // 明确告诉 lark-cli 当前应用 ID，方便它定位刚写入的 tenant_access_token。
+        environment.put("LARKSUITE_CLI_APP_ID", properties.getAppId());
+
+        // 管理员机器人项目统一使用 bot 身份。
+        environment.put("LARKSUITE_CLI_DEFAULT_AS", "bot");
+
+        // 移除 app_secret，避免 lark-cli 进入外部凭据模式后忽略本地 token store。
+        environment.remove("LARKSUITE_CLI_APP_SECRET");
+
+        // 打印受控环境说明，不打印密钥和 token。
+        log.info("SkillCLI业务命令环境已调整：appId={}，默认身份=bot，已移除LARKSUITE_CLI_APP_SECRET，原因=优先使用本地tenant_access_token",
+                properties.getAppId());
+
+        // 返回处理后的进程构造器。
+        return processBuilder;
     }
 
     private String readStream(InputStream inputStream) {
