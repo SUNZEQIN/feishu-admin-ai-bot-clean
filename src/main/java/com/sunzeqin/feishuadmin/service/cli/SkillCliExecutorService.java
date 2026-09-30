@@ -171,7 +171,7 @@ public class SkillCliExecutorService {
             }
 
             // 校验命令是否允许执行。
-            List<String> command = normalizeCommand(decision.command());
+            List<String> command = normalizeCommand(decision.command(), goal);
 
             // 如果模型重复执行已经成功过的相同命令，跳过真实调用，避免浪费步骤和重复请求飞书。
             if (hasSuccessfulCommand(observations, command)) {
@@ -298,15 +298,18 @@ public class SkillCliExecutorService {
                     - 多维表格 + IM：先用 base 处理表格，再用 im 把结果发给群或用户。
                 12. 不要因为当前业务域是 docs、vc、calendar、base 就拒绝执行 im/contact 等辅助命令，只要命令业务域在白名单内即可。
                 13. 如果要调用其它业务域，但还不知道命令用法，先执行该业务域的 --help 或 schema 查询。
-                14. 默认优先使用 --as bot；如果命令帮助、Skill 或报错说明必须用用户身份、以本人身份、user_access_token、send_as_user，就使用 --as user。
-                15. lark-cli skills read 是只读资料查询命令，可以用来读取内置技能说明，但它不是业务执行结果。
-                16. 如果某条列表命令已经带 --page-all 并且退出码为 0，不要再用相同 page-token 重复拉取同一页；应该基于已有结果继续下一步。
-                17. 不要重复执行 observations 中已经成功执行过的完全相同命令。
-                18. 对“整理聊天成文档并发送”这类任务，读取群消息成功后要尽快创建文档并发送链接，不要反复读取技能说明或重复分页。
-                19. 发送飞书卡片或重要结果到当前群时，优先使用 im +messages-reply 引用 originalMessageId，而不是普通 send。
-                20. 群聊里发送文本、Markdown、卡片时，内容开头要 @ senderOpenId 对应的人。
-                21. 如果命令支持 --message-id、--message-id-type、--receive-id 等参数，要优先用 originalMessageId 完成“引用原文回复”。
-                22. 如果需要用户授权且 CLI 返回 missing_scope / authorization / scope 不足，不要编造成功，直接 final_answer 说明缺少 scope。
+                14. 飞书操作默认必须使用 --as bot。
+                15. 只有用户原话明确包含“用我的身份”“以本人身份”“以用户身份”“用用户身份执行”时，才允许使用 --as user。
+                16. 命令帮助里写 supports user 或 supports user/bot，不代表必须使用 user；这种情况仍然使用 --as bot。
+                17. 如果 bot 身份缺少应用权限，要返回真实失败原因，不要自动切换到 user 身份规避权限。
+                18. lark-cli skills read 是只读资料查询命令，可以用来读取内置技能说明，但它不是业务执行结果。
+                19. 如果某条列表命令已经带 --page-all 并且退出码为 0，不要再用相同 page-token 重复拉取同一页；应该基于已有结果继续下一步。
+                20. 不要重复执行 observations 中已经成功执行过的完全相同命令。
+                21. 对“整理聊天成文档并发送”这类任务，读取群消息成功后要尽快创建文档并发送链接，不要反复读取技能说明或重复分页。
+                22. 发送飞书卡片或重要结果到当前群时，优先使用 im +messages-reply 引用 originalMessageId，而不是普通 send。
+                23. 群聊里发送文本、Markdown、卡片时，内容开头要 @ senderOpenId 对应的人。
+                24. 如果命令支持 --message-id、--message-id-type、--receive-id 等参数，要优先用 originalMessageId 完成“引用原文回复”。
+                25. 如果用户明确要求用户身份，且 CLI 返回 missing_scope / authorization / scope 不足，不要编造成功，直接 final_answer 说明缺少 scope。
 
                 业务域：%s
                 允许切换的业务域：%s
@@ -334,15 +337,25 @@ public class SkillCliExecutorService {
         // 合并 stdout 和 stderr。
         String text = safeText(commandResult.stdout()) + "\n" + safeText(commandResult.stderr());
 
-        // 没有缺权限关键字时直接返回。
+        // lark-cli 的 help / skills 输出里也会出现 scope 字样，不能把普通说明误判成缺权限。
         String lowerText = text.toLowerCase(Locale.ROOT);
-        if (!lowerText.contains("missing_scope")
-                && !lowerText.contains("missing scope")
-                && !lowerText.contains("scope")
-                && !lowerText.contains("authorization")
-                && !lowerText.contains("permission")
-                && !lowerText.contains("用户尚未授权")
-                && !lowerText.contains("access_token")) {
+        boolean authFailed = lowerText.contains("missing_scope")
+                || lowerText.contains("missing scope")
+                || lowerText.contains("insufficient scope")
+                || lowerText.contains("permission denied")
+                || lowerText.contains("no access token")
+                || lowerText.contains("token_missing")
+                || lowerText.contains("not configured")
+                || lowerText.contains("用户尚未授权")
+                || lowerText.contains("用户token不可用");
+
+        // 成功命令只有明确返回 ok=false 或缺权限关键词时，才允许进入授权分支。
+        boolean commandReportedFailure = commandResult.exitCode() != 0
+                || lowerText.contains("\"ok\": false")
+                || lowerText.contains("\"ok\":false");
+
+        // 没有真实认证失败时直接返回，避免 skills/help 输出误触发授权。
+        if (!authFailed || !commandReportedFailure) {
             return "";
         }
 
@@ -425,7 +438,7 @@ public class SkillCliExecutorService {
         return new CliStepDecision(type, reason, command, finalReply);
     }
 
-    private List<String> normalizeCommand(List<String> command) {
+    private List<String> normalizeCommand(List<String> command, String goal) {
         // 命令不能为空。
         if (command == null || command.isEmpty()) {
             throw new IllegalArgumentException("CLI 命令不能为空");
@@ -456,8 +469,8 @@ public class SkillCliExecutorService {
             ensureCommandDomainAllowed(firstArg);
         }
 
-        // 业务命令默认使用 bot 身份；如果模型明确选择 user，则保留 user 身份。
-        normalizeIdentity(normalized);
+        // 业务命令默认使用 bot 身份；只有用户明确要求用户身份时，才保留 user 身份。
+        normalizeIdentity(normalized, goal);
 
         // 返回规范化命令。
         return normalized;
@@ -482,7 +495,7 @@ public class SkillCliExecutorService {
                 || "||".equals(value);
     }
 
-    private void normalizeIdentity(List<String> command) {
+    private void normalizeIdentity(List<String> command, String goal) {
         // help/config/auth/skills/schema 这类命令不处理身份参数。
         if (!needTenantAccessToken(command)) {
             return;
@@ -503,6 +516,9 @@ public class SkillCliExecutorService {
                     if (!"bot".equals(oldValue) && !"user".equals(oldValue)) {
                         log.warn("[阶段6 CLI执行] 身份参数已修正：原身份={}，新身份=bot，原因=只允许bot或user", oldValue);
                         command.set(i + 1, "bot");
+                    } else if ("user".equals(oldValue) && !explicitUserIdentityRequired(goal)) {
+                        log.warn("[阶段6 CLI执行] 身份参数已修正：原身份=user，新身份=bot，原因=用户没有明确要求用户身份");
+                        command.set(i + 1, "bot");
                     }
                 } else {
                     command.add("bot");
@@ -515,6 +531,9 @@ public class SkillCliExecutorService {
                 if (!"--as=bot".equals(part) && !"--as=user".equals(part)) {
                     log.warn("[阶段6 CLI执行] 身份参数已修正：原参数={}，新参数=--as=bot，原因=只允许bot或user", part);
                     command.set(i, "--as=bot");
+                } else if ("--as=user".equals(part) && !explicitUserIdentityRequired(goal)) {
+                    log.warn("[阶段6 CLI执行] 身份参数已修正：原参数=--as=user，新参数=--as=bot，原因=用户没有明确要求用户身份");
+                    command.set(i, "--as=bot");
                 }
             }
         }
@@ -525,6 +544,22 @@ public class SkillCliExecutorService {
             command.add("bot");
             log.info("[阶段6 CLI执行] 身份参数已补充：身份=bot，原因=管理员机器人项目默认使用bot身份");
         }
+    }
+
+    private boolean explicitUserIdentityRequired(String goal) {
+        // 没有用户目标时默认不允许 user 身份。
+        if (goal == null || goal.isBlank()) {
+            return false;
+        }
+
+        // 只有用户明确说要用用户/本人身份时，才允许 --as user。
+        return goal.contains("用我的身份")
+                || goal.contains("以我的身份")
+                || goal.contains("用本人身份")
+                || goal.contains("以本人身份")
+                || goal.contains("用用户身份")
+                || goal.contains("以用户身份")
+                || goal.contains("用户身份执行");
     }
 
     private CliCommandResult executeCommand(List<String> command, String senderOpenId) {

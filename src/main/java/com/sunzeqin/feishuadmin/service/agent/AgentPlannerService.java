@@ -179,6 +179,7 @@ public class AgentPlannerService {
                 6. 调用 cli.run_skill 时，goal 必须保留用户完整目标，sourceChatId 必须传当前群 chatId；系统会自动补充 originalMessageId、senderOpenId、senderUserId。
                 7. 当前群 chatId 就是本次飞书事件所在群。用户在群聊里说“本群”“当前群”“群里”“这个群”，都默认指当前群 chatId。
                 8. 不要编造用户 ID、机器人 appId、群 ID、文档 token、表格 token。缺少信息时，优先通过 cli.run_skill 让 lark-cli 查询；确实查不到时再 final_answer 说明原因。
+                9. 飞书操作默认走机器人身份。只有用户原话明确说“用我的身份”“以本人身份”“以用户身份”时，goal 里才允许写用户身份；否则不要主动要求 user 授权。
 
                 电商 MCP Skill：
                 %s

@@ -70,6 +70,9 @@ public class AdminAgentService {
             // 如果配置开启了处理中提示，就给原消息加表情，不再发送“稍等”文本。
             if (properties.isProcessingReplyEnabled()) {
                 addProcessingReactions(event);
+            } else {
+                log.info("[阶段2 回复处理中] 处理中表情跳过：消息ID={}，原因=FEISHU_PROCESSING_REPLY_ENABLED=false",
+                        event.messageId());
             }
 
             // 交给 Agent 编排器执行多步循环。
@@ -143,8 +146,14 @@ public class AdminAgentService {
         // 读取配置里的表情类型。
         String reactionTypes = properties.getProcessingReactionTypes();
         if (reactionTypes == null || reactionTypes.isBlank()) {
+            log.info("[阶段2 回复处理中] 处理中表情跳过：消息ID={}，原因=FEISHU_PROCESSING_REACTION_TYPES为空",
+                    event.messageId());
             return;
         }
+
+        // 打印表情配置摘要，方便部署后确认配置是否生效。
+        log.info("[阶段2 回复处理中] 准备添加处理中表情：消息ID={}，配置={}",
+                event.messageId(), reactionTypes);
 
         // 多个表情用逗号分隔，逐个添加。
         for (String item : reactionTypes.split(",")) {
