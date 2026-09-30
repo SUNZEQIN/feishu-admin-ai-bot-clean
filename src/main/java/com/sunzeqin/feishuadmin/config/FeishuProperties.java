@@ -65,6 +65,12 @@ public class FeishuProperties {
     // 允许通过 Skill + CLI 执行的业务域。
     private String cliAllowedDomains = "im,base,docs,calendar,vc,contact,approval";
 
+    // 是否启用电商 MCP 服务。
+    private boolean ecommerceMcpEnabled = false;
+
+    // 电商 MCP 服务地址。
+    private String ecommerceMcpBaseUrl = "http://127.0.0.1:8090";
+
     public String getBaseUrl() {
         // 返回飞书 OpenAPI 基础地址。
         return baseUrl;
@@ -243,5 +249,25 @@ public class FeishuProperties {
     public void setCliAllowedDomains(String cliAllowedDomains) {
         // 设置允许的 CLI 业务域。
         this.cliAllowedDomains = cliAllowedDomains;
+    }
+
+    public boolean isEcommerceMcpEnabled() {
+        // 返回是否启用电商 MCP。
+        return ecommerceMcpEnabled;
+    }
+
+    public void setEcommerceMcpEnabled(boolean ecommerceMcpEnabled) {
+        // 设置是否启用电商 MCP。
+        this.ecommerceMcpEnabled = ecommerceMcpEnabled;
+    }
+
+    public String getEcommerceMcpBaseUrl() {
+        // 返回电商 MCP 服务地址。
+        return ecommerceMcpBaseUrl;
+    }
+
+    public void setEcommerceMcpBaseUrl(String ecommerceMcpBaseUrl) {
+        // 设置电商 MCP 服务地址。
+        this.ecommerceMcpBaseUrl = ecommerceMcpBaseUrl;
     }
 }

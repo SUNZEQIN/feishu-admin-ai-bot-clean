@@ -12,8 +12,10 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +43,9 @@ public class AgentPlannerService {
     // LangChain4j 聊天模型，未启用时为空。
     private final ChatModel chatModel;
 
+    // 电商 Agent Skill 提示词，从 resources/skills/ecommerce-agent.md 读取。
+    private final String ecommerceAgentSkill;
+
     public AgentPlannerService(FeishuProperties properties, JsonUtils jsonUtils, ToolRegistryService toolRegistry) {
         // 保存 JSON 工具类。
         this.jsonUtils = jsonUtils;
@@ -50,6 +55,9 @@ public class AgentPlannerService {
 
         // 创建模型。
         this.chatModel = buildChatModel(properties);
+
+        // 读取电商 Agent Skill。
+        this.ecommerceAgentSkill = readSkill("skills/ecommerce-agent.md");
     }
 
     public boolean enabled() {
@@ -162,29 +170,18 @@ public class AgentPlannerService {
                   "finalReply": "回复给用户的中文文本"
                 }
 
-                技能：创建群聊并拉入成员
-                0. 当前群 chatId 就是本次飞书事件所在群。用户在群聊里说“本群”“当前群”“群里”“这个群”，都默认指当前群 chatId。
-                1. 只要用户目标是创建群聊、拉人进群、把当前群成员复制到新群，就使用这个技能。
-                2. 第一步必须调用 im.list_chat_members，memberIdType=open_id，查询当前群里的用户成员。
-                3. 如果目标里包含普通用户，就从 im.list_chat_members 的 members 里按姓名匹配用户，取 memberId 作为 userOpenIds。
-                4. 如果用户说“群里的用户”“所有用户”“当前群用户”，就把 members 里 bot=false 的成员都放入 userOpenIds。
-                5. 如果目标里包含机器人、助手、应用、bot，必须调用 application.list_installed_apps 查询当前提问用户可用的应用。
-                6. 机器人不能用 open_id 拉入新群，机器人必须用 application.list_installed_apps 返回的 appId，也就是 cli_ 开头的应用 ID。
-                7. 如果目标里指定了机器人名称，就用机器人名称和 applications 里的 appName 做包含匹配或近似匹配，匹配到后取 appId 放入 botAppIds。
-                8. 如果用户说“群里的机器人”“所有机器人”，但 im.list_chat_members 没返回机器人名称，就从用户原话里的机器人名称匹配 applications；如果原话也没有明确机器人名称，就如实说明无法判断要拉哪些机器人。
-                9. im.create_chat 的 userOpenIds 只能放用户 open_id，botAppIds 只能放机器人 app_id，不要混用。
-                10. 飞书查询群成员接口不支持 memberIdType=app_id，永远不要传 app_id。
-                11. userOpenIds 和 botAppIds 都准备好以后，再调用 im.create_chat。
-                12. 不要编造用户 ID、机器人 appId、群 ID。缺少哪类 ID，就继续调用工具查询；工具也查不到时再 final_answer 说明原因。
-                13. 除非用户明确要求二次确认，否则创建群聊和拉入成员不需要额外确认。
-
-                固定工具优先规则：
-                1. 如果当前可用固定工具能完成用户目标，必须优先使用固定工具。
-                2. 当前固定工具主要覆盖：查询群成员、查询当前用户可用应用、创建群聊。
-                3. 如果用户目标涉及固定工具没有覆盖的能力，例如多维表格、云文档、日程、会议、审批、通讯录高级查询，就调用 cli.run_skill。
-                4. cli.run_skill 是长尾能力执行器，不是最终回复；它会读取本地 Skill，先查 lark-cli help/schema，再执行 CLI。
-                5. 调用 cli.run_skill 时，domain 要按业务选择：多维表格用 base，云文档用 docs，日程用 calendar，会议用 vc，妙记用 minutes，会议纪要用 note，群聊消息用 im，通讯录用 contact，审批用 approval，云盘/权限/评论用 drive，知识库用 wiki，Markdown 文档用 markdown，思维笔记用 mindnotes，画板用 whiteboard。
+                工具选择规则：
+                1. 如果用户目标是电商业务数据查询、分析、复盘、库存、订单、退款、客户画像，优先使用电商 MCP 工具。
+                2. 如果用户目标涉及飞书内部操作，统一调用 cli.run_skill，不要调用固定 OpenAPI 工具。
+                3. 飞书内部操作包括：群聊、消息、云文档、多维表格、日程、会议、审批、通讯录、云盘、知识库、妙记、任务等。
+                4. cli.run_skill 是飞书能力执行器，不是最终回复；它会读取本地 Skill，先查 lark-cli help/schema，再执行 CLI。
+                5. 调用 cli.run_skill 时，domain 要按业务选择：群聊和消息用 im，多维表格用 base，云文档用 docs，日程用 calendar，会议用 vc，妙记用 minutes，会议纪要用 note，通讯录用 contact，审批用 approval，云盘/权限/评论用 drive，知识库用 wiki，Markdown 文档用 markdown，思维笔记用 mindnotes，画板用 whiteboard。
                 6. 调用 cli.run_skill 时，goal 必须保留用户完整目标，sourceChatId 必须传当前群 chatId。
+                7. 当前群 chatId 就是本次飞书事件所在群。用户在群聊里说“本群”“当前群”“群里”“这个群”，都默认指当前群 chatId。
+                8. 不要编造用户 ID、机器人 appId、群 ID、文档 token、表格 token。缺少信息时，优先通过 cli.run_skill 让 lark-cli 查询；确实查不到时再 final_answer 说明原因。
+
+                电商 MCP Skill：
+                %s
 
                 当前群 chatId：%s
 
@@ -197,8 +194,28 @@ public class AgentPlannerService {
 
                 已有 observations：
                 %s
-                """.formatted(chatId, memoryText == null || memoryText.isBlank() ? "无" : memoryText,
+                """.formatted(ecommerceAgentSkill, chatId,
+                memoryText == null || memoryText.isBlank() ? "无" : memoryText,
                 userText, toolRegistry.toolDescriptions(), observationText);
+    }
+
+    private String readSkill(String path) {
+        try {
+            // 从 resources 读取指定 Skill 文档。
+            ClassPathResource resource = new ClassPathResource(path);
+
+            // 文件不存在时返回空字符串，避免启动失败。
+            if (!resource.exists()) {
+                return "";
+            }
+
+            // 返回文件内容。
+            return resource.getContentAsString(StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            // Skill 读取失败时记录日志并返回空字符串，不影响主流程启动。
+            log.warn("[阶段3 外层Agent规划] Skill读取失败：路径={}，错误={}", path, e.getMessage());
+            return "";
+        }
     }
 
     private AgentDecision parseDecision(String answer) {

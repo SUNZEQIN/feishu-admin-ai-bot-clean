@@ -37,3 +37,5 @@ feishu:
   cli-max-steps: ${FEISHU_CLI_MAX_STEPS:15}
   cli-timeout-seconds: ${FEISHU_CLI_TIMEOUT_SECONDS:60}
   cli-allowed-domains: ${FEISHU_CLI_ALLOWED_DOMAINS:im,base,docs,calendar,vc,minutes,note,contact,approval,drive,wiki,markdown,mindnotes,whiteboard}
+  ecommerce-mcp-enabled: ${FEISHU_ECOMMERCE_MCP_ENABLED:false}
+  ecommerce-mcp-base-url: ${FEISHU_ECOMMERCE_MCP_BASE_URL:http://127.0.0.1:8090}

@@ -7,7 +7,7 @@ import java.util.Map;
  *
  * <p>作用：保存 LLM 规划出来的工具名称和工具参数，Java 执行器只认这个结构。</p>
  *
- * @param name   工具名称，例如 im.list_chat_members
+ * @param name   工具名称，例如 cli.run_skill 或 ecommerce.call_tool
  * @param params 工具参数
  *
  * @author sunzeqin

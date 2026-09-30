@@ -2,8 +2,6 @@ package com.sunzeqin.feishuadmin.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.sunzeqin.feishuadmin.config.FeishuProperties;
-import com.sunzeqin.feishuadmin.pojo.ChatMember;
-import com.sunzeqin.feishuadmin.pojo.FeishuApplication;
 import com.sunzeqin.feishuadmin.utils.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,14 +11,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**
  * 飞书 OpenAPI 服务。
  *
- * <p>作用：集中封装 tenant_access_token、查询群成员、创建群聊、回复消息等飞书接口。</p>
+ * <p>作用：集中封装 tenant_access_token 和回复消息等基础飞书接口。</p>
  *
  * @author sunzeqin
  */
@@ -51,237 +47,6 @@ public class FeishuOpenApiService {
         this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
         // 保存 JSON 工具类。
         this.jsonUtils = jsonUtils;
-    }
-
-    /**
-     * 查询指定用户可用的应用列表。
-     *
-     * @param openId 提问用户 open_id
-     * @return 用户可用应用列表
-     */
-    public List<FeishuApplication> listInstalledApplications(String openId) {
-        // 保存所有分页查询出来的用户可用应用。
-        List<FeishuApplication> applications = new ArrayList<>();
-
-        // 飞书分页标记，第一页为空。
-        String pageToken = "";
-
-        // 循环拉取所有分页，直到飞书不再返回 page_token。
-        do {
-            // 当前页使用的 page_token。
-            String currentPageToken = pageToken;
-
-            // 拼接查询用户可用应用接口地址，open_id 使用提问人的 open_id。
-            String requestUri = "/open-apis/application/v1/user/visible_apps"
-                    + "?open_id=" + openId
-                    + "&page_size=50";
-
-            // 如果不是第一页，就把上一页返回的 page_token 带上。
-            if (!currentPageToken.isBlank()) {
-                requestUri = requestUri + "&page_token=" + currentPageToken;
-            }
-
-            // 打印查询用户可用应用列表的真实飞书请求入参。
-            log.info("[阶段4 工具调用] 飞书接口请求：方法=GET，接口=/open-apis/application/v1/user/visible_apps，用户openId={}，分页大小={}，分页标记={}",
-                    openId, 50, currentPageToken, requestUri);
-            log.debug("[阶段4 工具调用] 飞书接口完整请求地址：方法=GET，接口=/open-apis/application/v1/user/visible_apps，地址={}",
-                    requestUri);
-
-            // 调用飞书查询用户可用应用接口。
-            JsonNode response = restClient.get()
-                    .uri(requestUri)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenantAccessToken())
-                    .retrieve()
-                    .body(JsonNode.class);
-
-            // 打印查询用户可用应用列表的飞书响应摘要。
-            JsonNode appItems = applicationItems(response.path("data"));
-
-            log.info("[阶段4 工具调用] 飞书接口响应摘要：方法=GET，接口=/open-apis/application/v1/user/visible_apps，状态码={}，消息={}，应用数量={}，是否还有下一页={}，下一页标记={}",
-                    response.path("code").asInt(-1),
-                    response.path("msg").asText(""),
-                    appItems.size(),
-                    response.path("data").path("has_more").asBoolean(false),
-                    response.path("data").path("page_token").asText(""));
-            log.debug("[阶段4 工具调用] 飞书接口完整响应：方法=GET，接口=/open-apis/application/v1/user/visible_apps，响应={}",
-                    response);
-
-            // 检查飞书返回 code 是否为 0，不为 0 就抛异常。
-            ensureOk(response, "查询用户可用应用失败");
-
-            // data 节点里包含当前页应用和下一页 page_token。
-            JsonNode data = response.path("data");
-
-            // 遍历当前页应用。
-            for (JsonNode item : appItems) {
-                // 读取应用 ID。
-                String appId = item.path("app_id").asText("");
-
-                // 读取应用名称。
-                String appName = item.path("app_name").asText("");
-
-                // 有些返回结构可能把名称放在 name 字段，这里做兼容。
-                if (appName.isBlank()) {
-                    appName = item.path("name").asText("");
-                }
-
-                // 兼容部分接口返回 app.name 的结构。
-                if (appName.isBlank()) {
-                    appName = item.path("app").path("app_name").asText("");
-                }
-
-                // 兼容部分接口返回 app.app_id 的结构。
-                if (appId.isBlank()) {
-                    appId = item.path("app").path("app_id").asText("");
-                }
-
-                // 只保留有 app_id 的应用，避免把无效数据交给 Agent。
-                if (!appId.isBlank()) {
-                    applications.add(new FeishuApplication(appId, appName));
-                }
-            }
-
-            // 读取下一页 page_token，如果为空说明已经没有下一页。
-            pageToken = data.path("page_token").asText("");
-        } while (!pageToken.isBlank());
-
-        // 返回不可变列表，防止外部修改查询结果。
-        return List.copyOf(applications);
-    }
-
-    /**
-     * 查询群成员。
-     *
-     * @param chatId       群 ID
-     * @param memberIdType 成员 ID 类型，用户用 open_id，机器人用 app_id
-     * @return 成员列表
-     */
-    public List<ChatMember> listChatMembers(String chatId, String memberIdType) {
-        // 保存所有分页查询出来的群成员。
-        List<ChatMember> members = new ArrayList<>();
-
-        // 飞书分页标记，第一页为空。
-        String pageToken = "";
-
-        // 循环拉取所有分页，直到飞书不再返回 page_token。
-        do {
-            // 当前页使用的 page_token。
-            String currentPageToken = pageToken;
-
-            // 拼接查询群成员接口地址，member_id_type 决定返回 open_id 还是 app_id。
-            String requestUri = "/open-apis/im/v1/chats/" + chatId + "/members"
-                    + "?member_id_type=" + memberIdType
-                    + "&page_size=100";
-
-            // 如果不是第一页，就把上一页返回的 page_token 带上。
-            if (!currentPageToken.isBlank()) {
-                requestUri = requestUri + "&page_token=" + currentPageToken;
-            }
-
-            // 打印查询群成员的真实飞书请求入参。
-            log.info("[阶段4 工具调用] 飞书接口请求：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，群ID={}，成员ID类型={}，分页大小={}，分页标记={}",
-                    chatId, memberIdType, 100, currentPageToken);
-            log.debug("[阶段4 工具调用] 飞书接口完整请求地址：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，地址={}",
-                    requestUri);
-
-            // 调用飞书查询群成员接口。
-            JsonNode response = restClient.get()
-                    .uri(requestUri)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenantAccessToken())
-                    .retrieve()
-                    .body(JsonNode.class);
-
-            // 打印查询群成员的飞书响应摘要。
-            log.info("[阶段4 工具调用] 飞书接口响应摘要：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，状态码={}，消息={}，成员数量={}，是否还有下一页={}，下一页标记={}",
-                    response.path("code").asInt(-1),
-                    response.path("msg").asText(""),
-                    response.path("data").path("items").size(),
-                    response.path("data").path("has_more").asBoolean(false),
-                    response.path("data").path("page_token").asText(""));
-            log.debug("[阶段4 工具调用] 飞书接口完整响应：方法=GET，接口=/open-apis/im/v1/chats/{chatId}/members，响应={}",
-                    response);
-
-            // 检查飞书返回 code 是否为 0，不为 0 就抛异常。
-            ensureOk(response, "查询群成员失败");
-
-            // data 节点里包含当前页成员和下一页 page_token。
-            JsonNode data = response.path("data");
-
-            // 遍历当前页成员。
-            for (JsonNode item : data.path("items")) {
-                // 把飞书返回的成员信息转成系统内部 ChatMember。
-                members.add(new ChatMember(
-                        item.path("member_id").asText(""),
-                        item.path("name").asText(""),
-                        item.path("member_type").asText(""),
-                        memberIdType,
-                        item.path("tenant_key").asText("")
-                ));
-            }
-
-            // 读取下一页 page_token，如果为空说明已经没有下一页。
-            pageToken = data.path("page_token").asText("");
-        } while (!pageToken.isBlank());
-
-        // 返回不可变列表，防止外部修改查询结果。
-        return List.copyOf(members);
-    }
-
-    /**
-     * 创建群聊。
-     *
-     * @param chatName    群名
-     * @param userOpenIds 用户 open_id 列表
-     * @param botAppIds   机器人 app_id 列表
-     * @return 新群 chat_id
-     */
-    public String createChat(String chatName, List<String> userOpenIds, List<String> botAppIds) {
-        // 组装创建群聊接口请求体，用户使用 open_id，机器人使用 app_id。
-        Map<String, Object> body = Map.of("name", chatName,
-                "user_id_list", userOpenIds,
-                "bot_id_list", botAppIds);
-
-        // 打印建群入参，方便排查实际传给飞书的用户和机器人 ID。
-        log.info("[阶段4 工具调用] 飞书建群入参：群名={}，用户openId数量={}，机器人appId数量={}",
-                chatName, userOpenIds.size(), botAppIds.size());
-        log.debug("[阶段4 工具调用] 飞书建群完整入参：群名={}，用户openId列表={}，机器人appId列表={}，请求体={}",
-                chatName, userOpenIds, botAppIds, body);
-
-        // 打印创建群聊的真实飞书请求入参。
-        log.info("[阶段4 工具调用] 飞书接口请求：方法=POST，接口=/open-apis/im/v1/chats，查询参数=user_id_type=open_id,set_bot_manager=true，请求体摘要={}",
-                body);
-
-        // 调用飞书创建群聊接口。
-        JsonNode response = restClient.post()
-                .uri(builder -> builder.path("/open-apis/im/v1/chats")
-                        .queryParam("user_id_type", "open_id")
-                        .queryParam("set_bot_manager", true)
-                        .build())
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenantAccessToken())
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(JsonNode.class);
-
-        // 打印创建群聊的飞书响应摘要。
-        log.info("[阶段4 工具调用] 飞书接口响应摘要：方法=POST，接口=/open-apis/im/v1/chats，状态码={}，消息={}，是否有数据={}",
-                response.path("code").asInt(-1),
-                response.path("msg").asText(""),
-                !response.path("data").isMissingNode());
-        log.debug("[阶段4 工具调用] 飞书接口完整响应：方法=POST，接口=/open-apis/im/v1/chats，响应={}", response);
-
-        // 检查飞书返回 code 是否为 0。
-        ensureOk(response, "创建群聊失败");
-
-        // 不同返回结构里 chat_id 的位置可能略有差异，这里优先取 data.chat.chat_id。
-        String chatId = response.path("data").path("chat").path("chat_id")
-                .asText(response.path("data").path("chat_id").asText(""));
-
-        // 打印建群成功日志，方便用 chat_id 继续排查。
-        log.info("[阶段4 工具调用] 飞书建群成功：群名={}，新群会话ID={}", chatName, chatId);
-
-        // 返回新群 chat_id。
-        return chatId;
     }
 
     /**
@@ -381,30 +146,5 @@ public class FeishuOpenApiService {
             // 抛异常给上层，由上层组织用户可读的失败回复。
             throw new IllegalStateException(message + "：" + detail);
         }
-    }
-
-    private JsonNode applicationItems(JsonNode data) {
-        // 新接口常见返回字段：items。
-        if (data.path("items").isArray()) {
-            return data.path("items");
-        }
-
-        // 兼容可能的应用列表字段：app_list。
-        if (data.path("app_list").isArray()) {
-            return data.path("app_list");
-        }
-
-        // 兼容可能的应用列表字段：apps。
-        if (data.path("apps").isArray()) {
-            return data.path("apps");
-        }
-
-        // 兼容可能的应用列表字段：applications。
-        if (data.path("applications").isArray()) {
-            return data.path("applications");
-        }
-
-        // 找不到列表时返回 missing node，遍历时不会产生数据。
-        return data.path("items");
     }
 }
