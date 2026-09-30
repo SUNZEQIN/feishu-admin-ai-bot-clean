@@ -155,13 +155,37 @@ public class AdminAgentService {
 
             try {
                 // 给原消息加表情，表示机器人已经收到并开始处理。
-                openApi.addReaction(event.messageId(), reactionType);
+                String normalizedReactionType = normalizeReactionType(reactionType);
+                openApi.addReaction(event.messageId(), normalizedReactionType);
             } catch (Exception e) {
                 // 表情失败不影响主流程。
                 log.warn("[阶段2 回复处理中] 添加处理中表情失败：消息ID={}，表情={}，错误={}",
                         event.messageId(), reactionType, e.getMessage());
             }
         }
+    }
+
+    private String normalizeReactionType(String reactionType) {
+        // 飞书 IM reaction 的 emoji_type 大小写敏感，这里兼容历史配置里的大写写法。
+        if (reactionType == null || reactionType.isBlank()) {
+            return "";
+        }
+
+        // 去掉前后空格。
+        String value = reactionType.trim();
+
+        // 兼容之前配置的 GET。
+        if ("GET".equals(value)) {
+            return "Get";
+        }
+
+        // 飞书 IM reaction 官方列表里没有 ROBOT，用 OnIt 表达“机器人已接手处理”。
+        if ("ROBOT".equals(value)) {
+            return "OnIt";
+        }
+
+        // 其它合法枚举保持原样，避免破坏大小写敏感值，例如 EatingFood、CheckMark。
+        return value;
     }
 
     private boolean helpQuestion(String text) {

@@ -25,7 +25,7 @@ feishu:
   verification-token: ${FEISHU_VERIFICATION_TOKEN:}
   processing-reply-enabled: ${FEISHU_PROCESSING_REPLY_ENABLED:true}
   processing-reply-text: ${FEISHU_PROCESSING_REPLY_TEXT:⏳ 正在处理，请稍等...}
-  processing-reaction-types: ${FEISHU_PROCESSING_REACTION_TYPES:GET,ROBOT}
+  processing-reaction-types: ${FEISHU_PROCESSING_REACTION_TYPES:Get,OnIt}
   oauth-redirect-uri: ${FEISHU_OAUTH_REDIRECT_URI:}
   oauth-authorize-base-url: ${FEISHU_OAUTH_AUTHORIZE_BASE_URL:https://accounts.feishu.cn}
   oauth-default-scopes: ${FEISHU_OAUTH_DEFAULT_SCOPES:offline_access}

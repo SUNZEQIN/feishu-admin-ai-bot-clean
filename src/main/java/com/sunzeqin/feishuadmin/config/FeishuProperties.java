@@ -29,8 +29,8 @@ public class FeishuProperties {
     // 收到消息后的处理中提示文案。
     private String processingReplyText = "⏳ 正在处理，请稍等...";
 
-    // 收到消息后给原消息添加的处理中表情，多个表情用逗号分隔。
-    private String processingReactionTypes = "GET,ROBOT";
+    // 收到消息后给原消息添加的处理中表情，多个表情用逗号分隔。飞书 emoji_type 大小写敏感。
+    private String processingReactionTypes = "Get,OnIt";
 
     // 飞书 OAuth 回调地址，必须和开放平台后台配置一致。
     private String oauthRedirectUri = "";
