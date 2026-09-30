@@ -138,6 +138,14 @@ public class SkillCliExecutorService {
             // 校验命令是否允许执行。
             List<String> command = normalizeCommand(decision.command());
 
+            // 如果模型重复执行已经成功过的相同命令，跳过真实调用，避免浪费步骤和重复请求飞书。
+            if (hasSuccessfulCommand(observations, command)) {
+                String message = "重复命令已跳过，请基于已有成功结果继续下一步：" + String.join(" ", command);
+                log.warn("SkillCLI重复命令已跳过：业务域={}，步骤={}，命令={}", normalizedDomain, step, command);
+                observations.add(new CliCommandResult(String.join(" ", command), 0, message, ""));
+                continue;
+            }
+
             // 执行 CLI 命令。
             CliCommandResult commandResult = executeCommand(command);
 
@@ -147,6 +155,22 @@ public class SkillCliExecutorService {
 
         // 超过最大步骤数还没结束，就抛出异常。
         throw new IllegalStateException("Skill + CLI 超过最大步骤数，已停止执行");
+    }
+
+    private boolean hasSuccessfulCommand(List<CliCommandResult> observations, List<String> command) {
+        // 拼接当前命令文本，和历史 observation 中的命令保持同一格式。
+        String commandText = String.join(" ", command);
+
+        // 遍历历史执行结果。
+        for (CliCommandResult observation : observations) {
+            // 只拦截已经成功执行过的完全相同命令。
+            if (observation.exitCode() == 0 && commandText.equals(observation.command())) {
+                return true;
+            }
+        }
+
+        // 没有重复成功命令。
+        return false;
     }
 
     private ChatModel buildChatModel(FeishuProperties properties) {
@@ -220,6 +244,9 @@ public class SkillCliExecutorService {
                 13. 如果要调用其它业务域，但还不知道命令用法，先执行该业务域的 --help 或 schema 查询。
                 14. 本项目是管理员机器人项目，所有 lark-cli 业务命令必须使用 --as bot，不要使用 --as user。
                 15. lark-cli skills read 是只读资料查询命令，可以用来读取内置技能说明，但它不是业务执行结果。
+                16. 如果某条列表命令已经带 --page-all 并且退出码为 0，不要再用相同 page-token 重复拉取同一页；应该基于已有结果继续下一步。
+                17. 不要重复执行 observations 中已经成功执行过的完全相同命令。
+                18. 对“整理聊天成文档并发送”这类任务，读取群消息成功后要尽快创建文档并发送链接，不要反复读取技能说明或重复分页。
 
                 业务域：%s
                 允许切换的业务域：%s
