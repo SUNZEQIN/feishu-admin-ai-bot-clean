@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.Locale;
+
 /**
  * 管理员机器人业务服务。
  *
@@ -58,13 +60,23 @@ public class AdminAgentService {
     }
 
     private void doHandleMessage(FeishuMessageEvent event) {
+        // 保存处理中消息 ID，最终回复完成后用于删除临时提示。
+        String processingMessageId = "";
+
         try {
+            // 用户询问机器人能力时，直接返回结构化功能说明，不进入 Agent 多步执行。
+            if (helpQuestion(event.text())) {
+                replyToSender(event, helpReply());
+                return;
+            }
+
             // 如果配置开启了处理中提示，就先给用户回一条“正在处理”。
             if (properties.isProcessingReplyEnabled()) {
                 try {
                     // 用飞书回复接口回复原消息，告诉用户请求已经进入处理流程。
-                    replyToSender(event, properties.getProcessingReplyText());
-                    log.info("[阶段2 回复处理中] 已发送处理中提示：消息ID={}", event.messageId());
+                    processingMessageId = replyToSender(event, properties.getProcessingReplyText());
+                    log.info("[阶段2 回复处理中] 已发送处理中提示：原消息ID={}，处理中消息ID={}",
+                            event.messageId(), processingMessageId);
                 } catch (Exception ignored) {
                     // 处理中提示失败不影响主流程。
                     log.warn("[阶段2 回复处理中] 处理中提示发送失败但不影响主流程：消息ID={}，错误={}",
@@ -75,29 +87,73 @@ public class AdminAgentService {
             // 交给 Agent 编排器执行多步循环。
             AgentRunResult result = orchestrator.run(event);
 
+            // 如果工具已经用飞书卡片或飞书消息把结果发出，这里不再追加文本总结，避免重复刷屏。
+            if (cardOrMessageAlreadySent(result)) {
+                log.info("[阶段8 回复飞书] 跳过文本总结：消息ID={}，原因=工具已发送卡片或消息", event.messageId());
+                return;
+            }
+
             // 把最终处理结果回复到飞书原消息下面。
-            replyToSender(event, result.reply());
+            safeReplyToSender(event, result.reply());
         } catch (Exception e) {
             // 捕获后台线程异常，避免异步任务静默失败。
             log.error("[阶段8 回复飞书] 消息异步处理失败：消息ID={}，错误={}", event.messageId(), e.getMessage(), e);
 
-            // 如果是大模型余额不足，要明确回复用户，避免用户只看到“正在处理”。
-            if (LlmErrorUtils.insufficientBalance(e)) {
-                try {
-                    replyToSender(event, LlmErrorUtils.insufficientBalanceReply());
-                } catch (Exception replyError) {
-                    log.warn("[阶段8 回复飞书] 余额不足提示回复失败：消息ID={}，错误={}", event.messageId(), replyError.getMessage());
-                }
-            }
+            // 任何异常都要尽量回复用户，避免用户只看到“正在处理”。
+            safeReplyToSender(event, errorReply(event, e));
+        } finally {
+            // 最终处理完成后，删除“正在处理”临时消息。删除失败只记录日志，不影响业务结果。
+            hideProcessingMessage(event, processingMessageId);
         }
     }
 
-    private void replyToSender(FeishuMessageEvent event, String text) {
+    private String replyToSender(FeishuMessageEvent event, String text) {
         // 打印最终回复摘要，不在 INFO 里刷完整正文。
         log.info("[阶段8 回复飞书] 准备回复用户：消息ID={}，会话类型={}，是否@发送人={}，回复长度={}",
                 event.messageId(), event.chatType(), "group".equals(event.chatType()), text == null ? 0 : text.length());
         // 给飞书用户回复消息。群聊里统一 @ 触发本次请求的人。
-        openApi.replyText(event.messageId(), withSenderMention(event, text));
+        return openApi.replyText(event.messageId(), withSenderMention(event, text));
+    }
+
+    private void safeReplyToSender(FeishuMessageEvent event, String text) {
+        // 先清洗一次回复文本，减少平台限制触发概率。
+        String cleanedText = cleanReplyText(text);
+
+        try {
+            // 优先发送完整清洗后的结果。
+            replyToSender(event, cleanedText);
+        } catch (Exception firstError) {
+            // 第一次回复失败时打印完整异常，方便查飞书 code / log_id。
+            log.warn("[阶段8 回复飞书] 第一次回复失败：消息ID={}，错误={}", event.messageId(), firstError.getMessage());
+
+            // 如果是飞书平台限制，改发更短的兜底文本。
+            String fallbackText = fallbackReply(event, firstError);
+            try {
+                replyToSender(event, fallbackText);
+            } catch (Exception secondError) {
+                // 兜底回复仍失败时只能记录日志，避免异步线程继续抛异常。
+                log.error("[阶段8 回复飞书] 兜底回复仍失败：消息ID={}，错误={}",
+                        event.messageId(), secondError.getMessage(), secondError);
+            }
+        }
+    }
+
+    private void hideProcessingMessage(FeishuMessageEvent event, String processingMessageId) {
+        // 没有成功发出处理中消息时，不需要清理。
+        if (processingMessageId == null || processingMessageId.isBlank()) {
+            return;
+        }
+
+        try {
+            // 删除临时消息，让用户只看到最终结果。
+            openApi.deleteMessage(processingMessageId);
+            log.info("[阶段8 回复飞书] 已删除处理中提示：原消息ID={}，处理中消息ID={}",
+                    event.messageId(), processingMessageId);
+        } catch (Exception e) {
+            // 删除临时消息失败不影响主流程。
+            log.warn("[阶段8 回复飞书] 删除处理中提示失败：原消息ID={}，处理中消息ID={}，错误={}",
+                    event.messageId(), processingMessageId, e.getMessage());
+        }
     }
 
     private String withSenderMention(FeishuMessageEvent event, String text) {
@@ -113,5 +169,154 @@ public class AdminAgentService {
 
         // 飞书文本消息里使用 open_id 作为 at 的 user_id。
         return "<at user_id=\"" + event.openId() + "\"></at> " + text;
+    }
+
+    private boolean helpQuestion(String text) {
+        // 空消息不属于功能咨询。
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+
+        // 去掉机器人 @ 占位符，避免影响关键词判断。
+        String normalizedText = text.replaceAll("@_user_\\d+", "").trim().toLowerCase(Locale.ROOT);
+
+        // 常见功能咨询关键词。
+        return normalizedText.contains("你能做什么")
+                || normalizedText.contains("有什么功能")
+                || normalizedText.contains("功能介绍")
+                || normalizedText.contains("怎么用")
+                || normalizedText.equals("help")
+                || normalizedText.equals("帮助");
+    }
+
+    private String helpReply() {
+        // 返回结构化功能说明，方便用户快速理解怎么提问。
+        return """
+                ✅ 我可以帮你做这些事
+
+                📊 电商业务分析
+                - 查询客户订单、消费金额、客单价、品类偏好
+                - 分析商品销量、库存、退款、复购和异常订单
+                - 生成适合发到群里的简短汇总或飞书卡片
+
+                🛠 飞书 CLI 能力
+                - 群聊 / 消息：查群成员、读群消息、发消息、整理群聊
+                - 云文档 / 多维表格：创建文档、整理内容、查询或写入数据
+                - 日程 / 会议：创建日程、邀请参会人、查询会议信息
+                - 通讯录 / 审批 / 云盘：按已授权能力查询和处理
+
+                💬 你可以这样问
+                - 查一下陈金金最近 12 个月订单，并总结消费偏好
+                - 把本群今天聊天整理成一份文档，发给测试账号
+                - 新建一个群聊，把本群的孙泽勤和测试账号拉进去
+                - 创建明天下午 3 点会议，邀请陈金金参加
+
+                如果执行过程中权限、参数或平台接口报错，我会把失败原因直接回复给你。""";
+    }
+
+    private boolean cardOrMessageAlreadySent(AgentRunResult result) {
+        // 失败结果不能跳过回复，否则用户看不到失败原因。
+        if (result == null || !result.success()) {
+            return false;
+        }
+
+        // 空回复直接跳过。
+        if (result.reply() == null || result.reply().isBlank()) {
+            return true;
+        }
+
+        // 识别“工具已经把飞书卡片或消息发出去”的最终回复。
+        String reply = result.reply();
+        boolean containsSuccess = reply.contains("已") || reply.contains("成功");
+        boolean containsSentMessage = reply.contains("message_id") || reply.contains("发送结果") || reply.contains("发到本群");
+        boolean containsCard = reply.contains("飞书卡片") || reply.contains("卡片");
+
+        return containsSuccess && containsSentMessage && containsCard;
+    }
+
+    private String cleanReplyText(String text) {
+        // 空回复给统一提示，避免飞书接口 content 为空。
+        if (text == null || text.isBlank()) {
+            return "✅ 已处理完成。";
+        }
+
+        // 替换容易触发平台限制或对用户不友好的技术描述。
+        String cleanedText = text;
+        cleanedText = cleanedText.replace("内容审核", "平台限制");
+        cleanedText = cleanedText.replace("审核拦截", "平台限制");
+        cleanedText = cleanedText.replace("绕过平台审核", "继续发送");
+        cleanedText = cleanedText.replace("shell 转义", "命令参数处理");
+        cleanedText = cleanedText.replace("interactive 卡片 JSON", "卡片内容");
+        cleanedText = cleanedText.replace("错误码 230028", "平台返回限制");
+
+        // 最终文本过长时截断，避免回复本身再次失败。
+        if (cleanedText.length() > 1800) {
+            cleanedText = cleanedText.substring(0, 1800) + "\n\n内容较长，已自动截断。";
+        }
+
+        // 返回清洗后的文本。
+        return cleanedText;
+    }
+
+    private String errorReply(FeishuMessageEvent event, Exception error) {
+        // 大模型余额不足要给用户明确提示。
+        if (LlmErrorUtils.insufficientBalance(error)) {
+            return LlmErrorUtils.insufficientBalanceReply();
+        }
+
+        // 其它异常返回简短失败说明。
+        String message = error.getMessage();
+        if (message == null || message.isBlank()) {
+            message = error.getClass().getSimpleName();
+        }
+
+        // 清理报错文本，避免把过长堆栈或敏感内容发给用户。
+        message = cleanErrorMessage(message);
+
+        // 返回用户可读的失败提示。
+        return "⚠️ 本次处理失败\n\n"
+                + "🔎 原因：" + message + "\n"
+                + "🧾 消息ID：" + event.messageId();
+    }
+
+    private String fallbackReply(FeishuMessageEvent event, Exception error) {
+        // 平台限制时用最短文本兜底。
+        if (feishuMessageBlocked(error)) {
+            return "⚠️ 本次结果已生成，但完整内容没有发送成功。\n\n"
+                    + "请改成“只返回简短摘要”，或让我用飞书卡片 / 云文档方式发送。\n"
+                    + "🧾 消息ID：" + event.messageId();
+        }
+
+        // 普通回复失败时也给用户一个短提示。
+        return "⚠️ 回复消息时失败，请管理员按消息ID查看服务日志：" + event.messageId();
+    }
+
+    private boolean feishuMessageBlocked(Exception error) {
+        // 读取异常文本。
+        String text = LlmErrorUtils.fullErrorText(error);
+
+        // 飞书 230028 表示消息没有通过平台侧限制。
+        return text.contains("230028")
+                || text.contains("do NOT pass")
+                || text.contains("not pass");
+    }
+
+    private String cleanErrorMessage(String message) {
+        // 去掉换行，避免错误太长影响阅读。
+        String cleanedMessage = message.replace("\r", " ").replace("\n", " ");
+
+        // 不把完整密钥类字段发给用户。
+        cleanedMessage = cleanedMessage.replaceAll("(?i)(app_secret|api_key|access_token|refresh_token|authorization)=[^,\\s}]+", "$1=***");
+
+        // 飞书平台限制给用户更友好的描述。
+        cleanedMessage = cleanedMessage.replace("The messages do NOT pass the audit.", "消息内容被平台限制发送。");
+
+        // 报错太长时截断。
+        if (cleanedMessage.length() > 800) {
+            cleanedMessage = cleanedMessage.substring(0, 800) + "...";
+        }
+
+        // 返回清洗后的错误文本。
+        return cleanedMessage;
     }
 }

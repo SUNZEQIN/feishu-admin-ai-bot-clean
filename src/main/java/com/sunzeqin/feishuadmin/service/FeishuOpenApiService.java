@@ -54,8 +54,9 @@ public class FeishuOpenApiService {
      *
      * @param messageId 原消息 ID
      * @param text      回复文本
+     * @return 飞书新回复消息 ID
      */
-    public void replyText(String messageId, String text) {
+    public String replyText(String messageId, String text) {
         // 组装回复消息请求体。
         Map<String, Object> body = Map.of("msg_type", "text", "content", jsonUtils.write(Map.of("text", text)));
 
@@ -80,6 +81,46 @@ public class FeishuOpenApiService {
                 response.path("msg").asText(""),
                 response.path("data").path("message_id").asText(""));
         log.debug("[阶段8 回复飞书] 飞书回复完整响应：消息ID={}，响应={}", messageId, response);
+
+        // 检查飞书返回码，避免接口返回失败但上层误认为已经回复成功。
+        ensureOk(response, "回复飞书消息失败");
+
+        // 返回新消息 ID，方便上层删除“正在处理”这类临时消息。
+        return response.path("data").path("message_id").asText("");
+    }
+
+    /**
+     * 删除机器人自己发出的飞书消息。
+     *
+     * <p>作用：最终结果回复后，清理“正在处理，请稍等”这类临时提示。</p>
+     *
+     * @param messageId 要删除的消息 ID
+     */
+    public void deleteMessage(String messageId) {
+        // 空消息 ID 不能删除，直接跳过。
+        if (messageId == null || messageId.isBlank()) {
+            return;
+        }
+
+        // 打印删除请求摘要。
+        log.info("[阶段8 回复飞书] 删除临时消息请求：消息ID={}", messageId);
+
+        // 调用飞书删除消息接口。
+        JsonNode response = restClient.delete()
+                .uri("/open-apis/im/v1/messages/{message_id}", messageId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenantAccessToken())
+                .retrieve()
+                .body(JsonNode.class);
+
+        // 打印删除响应摘要。
+        log.info("[阶段8 回复飞书] 删除临时消息响应摘要：消息ID={}，状态码={}，消息={}",
+                messageId,
+                response.path("code").asInt(-1),
+                response.path("msg").asText(""));
+        log.debug("[阶段8 回复飞书] 删除临时消息完整响应：消息ID={}，响应={}", messageId, response);
+
+        // 检查删除结果。
+        ensureOk(response, "删除飞书临时消息失败");
     }
 
     /**
