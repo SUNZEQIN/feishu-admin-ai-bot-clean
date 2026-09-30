@@ -305,7 +305,7 @@ public class UserOAuthTokenService {
         // 读取 token 字段。
         String accessToken = data.path("access_token").asText("");
         String refreshToken = data.path("refresh_token").asText("");
-        String scopeText = firstNotBlank(data.path("scope").asText(""), fallbackScope);
+        String scopeText = mergeScopes(fallbackScope, data.path("scope").asText(""));
 
         // 计算过期时间。
         Instant expiresAt = Instant.now().plusSeconds(data.path("expires_in").asLong(data.path("expire").asLong(7200)));
@@ -444,6 +444,20 @@ public class UserOAuthTokenService {
     private String normalizeScopes(String scopeText) {
         // 去重并保持顺序。
         return String.join(" ", parseScopes(scopeText));
+    }
+
+    private String mergeScopes(String firstScopeText, String secondScopeText) {
+        // 合并本次申请 scope 和飞书返回 scope，避免飞书只返回部分字段导致下次重复授权。
+        Set<String> scopes = new LinkedHashSet<>();
+
+        // 添加第一组 scope。
+        scopes.addAll(parseScopes(firstScopeText));
+
+        // 添加第二组 scope。
+        scopes.addAll(parseScopes(secondScopeText));
+
+        // 返回空格分隔 scope。
+        return String.join(" ", scopes);
     }
 
     private Set<String> parseScopes(String scopeText) {
