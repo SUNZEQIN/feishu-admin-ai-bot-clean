@@ -40,6 +40,12 @@ public class FeishuOpenApiService {
     // 记录 token 过期时间，快过期时自动重新获取。
     private volatile Instant tokenExpiresAt = Instant.EPOCH;
 
+    // 缓存 app_access_token，用户 OAuth 换 token 时需要用。
+    private volatile String appAccessToken = "";
+
+    // 记录 app_access_token 过期时间。
+    private volatile Instant appTokenExpiresAt = Instant.EPOCH;
+
     public FeishuOpenApiService(FeishuProperties properties, RestClient.Builder builder, JsonUtils jsonUtils) {
         // 保存飞书配置。
         this.properties = properties;
@@ -124,6 +130,48 @@ public class FeishuOpenApiService {
     }
 
     /**
+     * 给原消息添加表情反馈。
+     *
+     * <p>作用：收到用户消息后，用表情表示机器人已经开始处理，避免发送“稍等”文本。</p>
+     *
+     * @param messageId    原消息 ID
+     * @param reactionType 表情类型
+     */
+    public void addReaction(String messageId, String reactionType) {
+        // 空消息或空表情不处理。
+        if (messageId == null || messageId.isBlank() || reactionType == null || reactionType.isBlank()) {
+            return;
+        }
+
+        // 组装添加表情请求体。
+        Map<String, Object> body = Map.of("reaction_type", reactionType);
+
+        // 打印请求摘要。
+        log.info("[阶段2 回复处理中] 添加消息表情请求：消息ID={}，表情={}", messageId, reactionType);
+        log.debug("[阶段2 回复处理中] 添加消息表情完整请求：消息ID={}，请求体={}", messageId, body);
+
+        // 调用飞书添加表情接口。
+        JsonNode response = restClient.post()
+                .uri("/open-apis/im/v1/messages/{message_id}/reactions", messageId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenantAccessToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(JsonNode.class);
+
+        // 打印响应摘要。
+        log.info("[阶段2 回复处理中] 添加消息表情响应摘要：消息ID={}，表情={}，状态码={}，消息={}",
+                messageId,
+                reactionType,
+                response.path("code").asInt(-1),
+                response.path("msg").asText(""));
+        log.debug("[阶段2 回复处理中] 添加消息表情完整响应：消息ID={}，响应={}", messageId, response);
+
+        // 检查返回码。
+        ensureOk(response, "添加飞书消息表情失败");
+    }
+
+    /**
      * 给 lark-cli 使用的 tenant_access_token。
      *
      * <p>作用：复用 Java OpenAPI 已经验证过的应用凭据，在执行 lark-cli 前写入 CLI 的 token store。</p>
@@ -133,6 +181,54 @@ public class FeishuOpenApiService {
     public String tenantAccessTokenForCli() {
         // 复用已有 token 缓存和刷新逻辑。
         return tenantAccessToken();
+    }
+
+    /**
+     * 获取 app_access_token。
+     *
+     * <p>作用：OAuth 授权码换用户 token 时需要 app_access_token。</p>
+     *
+     * @return app_access_token 明文，不能打印到日志
+     */
+    public String appAccessTokenForOAuth() {
+        // 复用 app token 缓存。
+        return appAccessToken();
+    }
+
+    private synchronized String appAccessToken() {
+        // token 未过期时直接复用。
+        if (!appAccessToken.isBlank() && Instant.now().isBefore(appTokenExpiresAt.minusSeconds(60))) {
+            log.info("[阶段4 工具调用] 飞书app_access_token缓存命中：过期时间={}", appTokenExpiresAt);
+            return appAccessToken;
+        }
+
+        // 打印请求摘要，不打印 appSecret。
+        log.info("[阶段4 工具调用] 飞书接口请求：方法=POST，接口=/open-apis/auth/v3/app_access_token/internal，appId={}，appSecret是否已配置={}",
+                properties.getAppId(), properties.getAppSecret() != null && !properties.getAppSecret().isBlank());
+
+        // 获取 app_access_token。
+        JsonNode response = restClient.post()
+                .uri("/open-apis/auth/v3/app_access_token/internal")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("app_id", properties.getAppId(), "app_secret", properties.getAppSecret()))
+                .retrieve()
+                .body(JsonNode.class);
+
+        // 打印响应摘要，不打印 token。
+        log.info("[阶段4 工具调用] 飞书接口响应摘要：方法=POST，接口=/open-apis/auth/v3/app_access_token/internal，状态码={}，消息={}，有效期秒数={}",
+                response.path("code").asInt(-1),
+                response.path("msg").asText(""),
+                response.path("expire").asLong(0));
+
+        // 检查返回码。
+        ensureOk(response, "获取 app_access_token 失败");
+
+        // 保存 token。
+        appAccessToken = response.path("app_access_token").asText("");
+        appTokenExpiresAt = Instant.now().plusSeconds(response.path("expire").asLong(7200));
+
+        // 返回 token。
+        return appAccessToken;
     }
 
     private synchronized String tenantAccessToken() {

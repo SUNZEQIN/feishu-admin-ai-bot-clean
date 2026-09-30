@@ -44,10 +44,12 @@ public class ToolRegistryService {
                 可用工具：
                 1. cli.run_skill
                    作用：统一执行飞书相关能力，包含群聊、消息、文档、多维表格、日程、会议、审批、通讯录等。
-                   参数：domain, goal, sourceChatId。
+                   参数：domain, goal, sourceChatId, originalMessageId, senderOpenId, senderUserId。
                    domain 只能是 im、base、docs、calendar、vc、minutes、note、contact、approval、drive、wiki、markdown、mindnotes、whiteboard。
                    goal 是用户原始目标的完整中文描述。
                    sourceChatId 是当前飞书事件所在群或会话 ID。
+                   originalMessageId 是用户原消息 ID，发卡片或消息时优先引用这条原文。
+                   senderOpenId 是触发人的 open_id，群聊回复时优先 @ 这个人。
                    注意：飞书内部操作都走这个工具，不要再调用固定 OpenAPI 工具。
 
                 2. ecommerce.list_tools
@@ -128,6 +130,15 @@ public class ToolRegistryService {
         // 从参数里读取来源会话 ID。
         String sourceChatId = stringParam(call, "sourceChatId");
 
+        // 从参数里读取原消息 ID。
+        String originalMessageId = stringParam(call, "originalMessageId");
+
+        // 从参数里读取发送人 open_id。
+        String senderOpenId = stringParam(call, "senderOpenId");
+
+        // 从参数里读取发送人 user_id。
+        String senderUserId = stringParam(call, "senderUserId");
+
         // CLI 业务域不能为空。
         if (domain.isBlank()) {
             return ToolResult.failed(call.name(), "cli.run_skill 缺少 domain 参数");
@@ -144,7 +155,8 @@ public class ToolRegistryService {
         }
 
         // 调用 Skill + CLI 执行器。
-        Map<String, Object> data = skillCliExecutor.runSkill(domain, goal, sourceChatId);
+        Map<String, Object> data = skillCliExecutor.runSkill(domain, goal, sourceChatId,
+                originalMessageId, senderOpenId, senderUserId);
 
         // 返回执行结果。
         return ToolResult.success(call.name(), "Skill + CLI 执行完成", data);

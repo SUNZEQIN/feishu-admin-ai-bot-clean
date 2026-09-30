@@ -13,3 +13,37 @@ CREATE TABLE IF NOT EXISTS agent_conversation_memory (
     KEY idx_memory_chat_id (chat_id),
     KEY idx_memory_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent会话记忆表';
+
+CREATE TABLE IF NOT EXISTS feishu_user_oauth_token (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    app_id VARCHAR(128) NOT NULL COMMENT '飞书应用ID',
+    user_open_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '授权用户open_id',
+    user_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '授权用户user_id',
+    scope_text TEXT NOT NULL COMMENT '用户已授权scope，空格分隔',
+    access_token TEXT NOT NULL COMMENT '用户access_token，按需求不加密保存',
+    refresh_token TEXT NOT NULL COMMENT '用户refresh_token，按需求不加密保存',
+    expires_at TIMESTAMP NULL DEFAULT NULL COMMENT 'access_token过期时间',
+    refresh_expires_at TIMESTAMP NULL DEFAULT NULL COMMENT 'refresh_token过期时间',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_app_user_open_id (app_id, user_open_id),
+    KEY idx_oauth_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='飞书用户OAuth token表';
+
+CREATE TABLE IF NOT EXISTS feishu_oauth_state (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    state VARCHAR(128) NOT NULL COMMENT 'OAuth state随机串',
+    app_id VARCHAR(128) NOT NULL COMMENT '飞书应用ID',
+    user_open_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '触发授权的用户open_id',
+    user_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '触发授权的用户user_id',
+    chat_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '触发授权的会话ID',
+    message_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '触发授权的消息ID',
+    scope_text TEXT NOT NULL COMMENT '本次申请的scope，空格分隔',
+    used TINYINT NOT NULL DEFAULT 0 COMMENT '是否已使用：0=未使用，1=已使用',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_oauth_state (state),
+    KEY idx_oauth_state_user (app_id, user_open_id),
+    KEY idx_oauth_state_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='飞书OAuth授权状态表';

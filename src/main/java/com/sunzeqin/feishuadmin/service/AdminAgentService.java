@@ -60,9 +60,6 @@ public class AdminAgentService {
     }
 
     private void doHandleMessage(FeishuMessageEvent event) {
-        // 保存处理中消息 ID，最终回复完成后用于删除临时提示。
-        String processingMessageId = "";
-
         try {
             // 用户询问机器人能力时，直接返回结构化功能说明，不进入 Agent 多步执行。
             if (helpQuestion(event.text())) {
@@ -70,18 +67,9 @@ public class AdminAgentService {
                 return;
             }
 
-            // 如果配置开启了处理中提示，就先给用户回一条“正在处理”。
+            // 如果配置开启了处理中提示，就给原消息加表情，不再发送“稍等”文本。
             if (properties.isProcessingReplyEnabled()) {
-                try {
-                    // 用飞书回复接口回复原消息，告诉用户请求已经进入处理流程。
-                    processingMessageId = replyToSender(event, properties.getProcessingReplyText());
-                    log.info("[阶段2 回复处理中] 已发送处理中提示：原消息ID={}，处理中消息ID={}",
-                            event.messageId(), processingMessageId);
-                } catch (Exception ignored) {
-                    // 处理中提示失败不影响主流程。
-                    log.warn("[阶段2 回复处理中] 处理中提示发送失败但不影响主流程：消息ID={}，错误={}",
-                            event.messageId(), ignored.getMessage());
-                }
+                addProcessingReactions(event);
             }
 
             // 交给 Agent 编排器执行多步循环。
@@ -101,9 +89,6 @@ public class AdminAgentService {
 
             // 任何异常都要尽量回复用户，避免用户只看到“正在处理”。
             safeReplyToSender(event, errorReply(event, e));
-        } finally {
-            // 最终处理完成后，删除“正在处理”临时消息。删除失败只记录日志，不影响业务结果。
-            hideProcessingMessage(event, processingMessageId);
         }
     }
 
@@ -138,24 +123,6 @@ public class AdminAgentService {
         }
     }
 
-    private void hideProcessingMessage(FeishuMessageEvent event, String processingMessageId) {
-        // 没有成功发出处理中消息时，不需要清理。
-        if (processingMessageId == null || processingMessageId.isBlank()) {
-            return;
-        }
-
-        try {
-            // 删除临时消息，让用户只看到最终结果。
-            openApi.deleteMessage(processingMessageId);
-            log.info("[阶段8 回复飞书] 已删除处理中提示：原消息ID={}，处理中消息ID={}",
-                    event.messageId(), processingMessageId);
-        } catch (Exception e) {
-            // 删除临时消息失败不影响主流程。
-            log.warn("[阶段8 回复飞书] 删除处理中提示失败：原消息ID={}，处理中消息ID={}，错误={}",
-                    event.messageId(), processingMessageId, e.getMessage());
-        }
-    }
-
     private String withSenderMention(FeishuMessageEvent event, String text) {
         // 非群聊不需要 @，私聊里直接回复即可。
         if (!"group".equals(event.chatType())) {
@@ -169,6 +136,31 @@ public class AdminAgentService {
 
         // 飞书文本消息里使用 open_id 作为 at 的 user_id。
         return "<at user_id=\"" + event.openId() + "\"></at> " + text;
+    }
+
+    private void addProcessingReactions(FeishuMessageEvent event) {
+        // 读取配置里的表情类型。
+        String reactionTypes = properties.getProcessingReactionTypes();
+        if (reactionTypes == null || reactionTypes.isBlank()) {
+            return;
+        }
+
+        // 多个表情用逗号分隔，逐个添加。
+        for (String item : reactionTypes.split(",")) {
+            String reactionType = item.trim();
+            if (reactionType.isBlank()) {
+                continue;
+            }
+
+            try {
+                // 给原消息加表情，表示机器人已经收到并开始处理。
+                openApi.addReaction(event.messageId(), reactionType);
+            } catch (Exception e) {
+                // 表情失败不影响主流程。
+                log.warn("[阶段2 回复处理中] 添加处理中表情失败：消息ID={}，表情={}，错误={}",
+                        event.messageId(), reactionType, e.getMessage());
+            }
+        }
     }
 
     private boolean helpQuestion(String text) {

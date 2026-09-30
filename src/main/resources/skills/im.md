@@ -21,6 +21,9 @@
 5. 如果要从当前群复制成员，先查询当前群成员，再按名称筛选。
 6. 如果命令失败，要根据 stderr/stdout 调整命令，不要重复执行同一条错误命令。
 7. 查询列表类数据时优先使用 `--page-all`，如果命令需要 `--page-size`，不要超过 50。
+8. 向当前群返回结果、卡片、Markdown 或文本时，优先使用 `lark-cli im +messages-reply` 引用 `originalMessageId`，不要直接 `+messages-send`。
+9. 群聊回复内容开头要 @ `senderOpenId` 对应的人，避免群里多人同时使用时看不清是谁的结果。
+10. 如果 `+messages-reply --help` 显示参数名和下面示例不一致，以当前 CLI help 为准。
 
 ## 常见查询
 
@@ -68,6 +71,14 @@ lark-cli im +chat-messages-list --chat-id <sourceChatId> --as bot --page-all --p
 ```bash
 lark-cli im +messages-search --chat-id <sourceChatId> --query <关键词> --as bot --page-all --page-size 20 --format json
 ```
+
+发送结果到当前群时优先使用引用回复：
+
+```bash
+lark-cli im +messages-reply --message-id <originalMessageId> --text "<at user_id=\"<senderOpenId>\"></at> 处理结果" --as bot --format json
+```
+
+发送飞书卡片时，也优先用引用回复。如果 `+messages-reply` 支持 `--content`，就把卡片 JSON 放到 `--content` 或 `@file`，并引用 `originalMessageId`。
 
 ## 回复要求
 

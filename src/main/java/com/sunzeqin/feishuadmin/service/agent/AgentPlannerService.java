@@ -176,7 +176,7 @@ public class AgentPlannerService {
                 3. 飞书内部操作包括：群聊、消息、云文档、多维表格、日程、会议、审批、通讯录、云盘、知识库、妙记、任务等。
                 4. cli.run_skill 是飞书能力执行器，不是最终回复；它会读取本地 Skill，先查 lark-cli help/schema，再执行 CLI。
                 5. 调用 cli.run_skill 时，domain 要按业务选择：群聊和消息用 im，多维表格用 base，云文档用 docs，日程用 calendar，会议用 vc，妙记用 minutes，会议纪要用 note，通讯录用 contact，审批用 approval，云盘/权限/评论用 drive，知识库用 wiki，Markdown 文档用 markdown，思维笔记用 mindnotes，画板用 whiteboard。
-                6. 调用 cli.run_skill 时，goal 必须保留用户完整目标，sourceChatId 必须传当前群 chatId。
+                6. 调用 cli.run_skill 时，goal 必须保留用户完整目标，sourceChatId 必须传当前群 chatId；系统会自动补充 originalMessageId、senderOpenId、senderUserId。
                 7. 当前群 chatId 就是本次飞书事件所在群。用户在群聊里说“本群”“当前群”“群里”“这个群”，都默认指当前群 chatId。
                 8. 不要编造用户 ID、机器人 appId、群 ID、文档 token、表格 token。缺少信息时，优先通过 cli.run_skill 让 lark-cli 查询；确实查不到时再 final_answer 说明原因。
 

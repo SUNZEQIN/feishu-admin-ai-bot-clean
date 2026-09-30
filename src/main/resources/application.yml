@@ -25,6 +25,11 @@ feishu:
   verification-token: ${FEISHU_VERIFICATION_TOKEN:}
   processing-reply-enabled: ${FEISHU_PROCESSING_REPLY_ENABLED:true}
   processing-reply-text: ${FEISHU_PROCESSING_REPLY_TEXT:⏳ 正在处理，请稍等...}
+  processing-reaction-types: ${FEISHU_PROCESSING_REACTION_TYPES:GET,ROBOT}
+  oauth-redirect-uri: ${FEISHU_OAUTH_REDIRECT_URI:}
+  oauth-authorize-base-url: ${FEISHU_OAUTH_AUTHORIZE_BASE_URL:https://accounts.feishu.cn}
+  oauth-default-scopes: ${FEISHU_OAUTH_DEFAULT_SCOPES:offline_access}
+  oauth-refresh-before-seconds: ${FEISHU_OAUTH_REFRESH_BEFORE_SECONDS:600}
   llm-enabled: ${FEISHU_LLM_ENABLED:false}
   llm-base-url: ${FEISHU_LLM_BASE_URL:https://api.deepseek.com}
   llm-api-key: ${FEISHU_LLM_API_KEY:}

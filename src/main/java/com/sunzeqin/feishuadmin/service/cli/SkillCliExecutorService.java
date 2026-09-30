@@ -2,9 +2,11 @@ package com.sunzeqin.feishuadmin.service.cli;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.sunzeqin.feishuadmin.config.FeishuProperties;
+import com.sunzeqin.feishuadmin.pojo.FeishuMessageEvent;
 import com.sunzeqin.feishuadmin.pojo.cli.CliCommandResult;
 import com.sunzeqin.feishuadmin.pojo.cli.CliStepDecision;
 import com.sunzeqin.feishuadmin.service.FeishuOpenApiService;
+import com.sunzeqin.feishuadmin.service.UserOAuthTokenService;
 import com.sunzeqin.feishuadmin.utils.JsonUtils;
 import com.sunzeqin.feishuadmin.utils.LlmErrorUtils;
 import dev.langchain4j.model.chat.ChatModel;
@@ -22,8 +24,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Skill + CLI 执行服务。
@@ -46,11 +52,14 @@ public class SkillCliExecutorService {
     // 飞书 OpenAPI 服务，用来获取 tenant_access_token 并写入 lark-cli。
     private final FeishuOpenApiService openApiService;
 
+    // 用户授权服务，用来生成授权链接和判断 scope。
+    private final UserOAuthTokenService userOAuthTokenService;
+
     // CLI 内部规划器使用的大模型。
     private final ChatModel chatModel;
 
     public SkillCliExecutorService(FeishuProperties properties, JsonUtils jsonUtils,
-            FeishuOpenApiService openApiService) {
+            FeishuOpenApiService openApiService, UserOAuthTokenService userOAuthTokenService) {
         // 保存飞书配置。
         this.properties = properties;
 
@@ -60,11 +69,15 @@ public class SkillCliExecutorService {
         // 保存飞书 OpenAPI 服务。
         this.openApiService = openApiService;
 
+        // 保存用户授权服务。
+        this.userOAuthTokenService = userOAuthTokenService;
+
         // 创建 CLI 内部规划器模型。
         this.chatModel = buildChatModel(properties);
     }
 
-    public Map<String, Object> runSkill(String domain, String goal, String sourceChatId) {
+    public Map<String, Object> runSkill(String domain, String goal, String sourceChatId,
+            String originalMessageId, String senderOpenId, String senderUserId) {
         // 校验 CLI 是否启用。
         if (!properties.isCliEnabled()) {
             throw new IllegalStateException("Skill + CLI 未启用");
@@ -106,7 +119,8 @@ public class SkillCliExecutorService {
         // 循环执行 CLI 内部规划。
         for (int step = 1; step <= properties.getCliMaxSteps(); step++) {
             // 构造 CLI 内部规划提示词。
-            String prompt = buildPrompt(normalizedDomain, goal, sourceChatId, skillText, observations);
+            String prompt = buildPrompt(normalizedDomain, goal, sourceChatId, originalMessageId,
+                    senderOpenId, senderUserId, skillText, observations);
 
             // 打印规划输入摘要。
             log.info("[阶段5 SkillCLI规划] 规划输入：业务域={}，步骤={}，观察结果数量={}",
@@ -171,6 +185,26 @@ public class SkillCliExecutorService {
 
             // 保存执行结果。
             observations.add(commandResult);
+
+            // CLI 明确返回缺少用户授权 scope 时，生成授权链接并停止当前任务。
+            String missingScopes = extractMissingScopes(commandResult);
+            if (!missingScopes.isBlank()) {
+                String authorizeUrl = buildAuthorizeUrl(sourceChatId, originalMessageId, senderOpenId,
+                        senderUserId, missingScopes);
+                String reply = "需要你授权后才能继续执行。\n\n"
+                        + "授权域：" + missingScopes + "\n"
+                        + "授权链接：" + authorizeUrl + "\n\n"
+                        + "授权链接里已经包含 scope 字段。授权完成后，系统会保存到用户表并定时刷新 token。";
+                return Map.of(
+                        "domain", normalizedDomain,
+                        "goal", goal,
+                        "sourceChatId", sourceChatId,
+                        "requiredScopes", missingScopes,
+                        "authorizeUrl", authorizeUrl,
+                        "finalReply", reply,
+                        "observations", observations
+                );
+            }
         }
 
         // 超过最大步骤数还没结束，就抛出异常。
@@ -214,7 +248,8 @@ public class SkillCliExecutorService {
                 .build();
     }
 
-    private String buildPrompt(String domain, String goal, String sourceChatId,
+    private String buildPrompt(String domain, String goal, String sourceChatId, String originalMessageId,
+            String senderOpenId, String senderUserId,
             String skillText, List<CliCommandResult> observations) {
         // 把 CLI 历史执行结果转成 JSON，方便模型阅读。
         String observationText = jsonUtils.write(observations);
@@ -267,10 +302,17 @@ public class SkillCliExecutorService {
                 16. 如果某条列表命令已经带 --page-all 并且退出码为 0，不要再用相同 page-token 重复拉取同一页；应该基于已有结果继续下一步。
                 17. 不要重复执行 observations 中已经成功执行过的完全相同命令。
                 18. 对“整理聊天成文档并发送”这类任务，读取群消息成功后要尽快创建文档并发送链接，不要反复读取技能说明或重复分页。
+                19. 发送飞书卡片或重要结果到当前群时，优先使用 im +messages-reply 引用 originalMessageId，而不是普通 send。
+                20. 群聊里发送文本、Markdown、卡片时，内容开头要 @ senderOpenId 对应的人。
+                21. 如果命令支持 --message-id、--message-id-type、--receive-id 等参数，要优先用 originalMessageId 完成“引用原文回复”。
+                22. 如果需要用户授权且 CLI 返回 missing_scope / authorization / scope 不足，不要编造成功，直接 final_answer 说明缺少 scope。
 
                 业务域：%s
                 允许切换的业务域：%s
                 来源群ID：%s
+                原消息ID originalMessageId：%s
+                触发人open_id senderOpenId：%s
+                触发人user_id senderUserId：%s
                 用户目标：%s
 
                 Skill 内容集合：
@@ -278,7 +320,73 @@ public class SkillCliExecutorService {
 
                 已有 CLI observations：
                 %s
-                """.formatted(domain, properties.getCliAllowedDomains(), sourceChatId, goal, skillText, observationText);
+                """.formatted(domain, properties.getCliAllowedDomains(), sourceChatId,
+                originalMessageId, senderOpenId, senderUserId, goal, skillText, observationText);
+    }
+
+    private String extractMissingScopes(CliCommandResult commandResult) {
+        // 只处理失败命令。
+        if (commandResult == null || commandResult.exitCode() == 0) {
+            return "";
+        }
+
+        // 合并 stdout 和 stderr。
+        String text = firstNotBlank(commandResult.stderr(), commandResult.stdout());
+
+        // 没有缺权限关键字时直接返回。
+        String lowerText = text.toLowerCase(Locale.ROOT);
+        if (!lowerText.contains("missing_scope")
+                && !lowerText.contains("missing scope")
+                && !lowerText.contains("scope")
+                && !lowerText.contains("authorization")) {
+            return "";
+        }
+
+        // 抽取类似 im:message.send_as_user / calendar:calendar.event:create 的 scope。
+        Pattern pattern = Pattern.compile("[a-z][a-z0-9_]*:[a-zA-Z0-9_.:-]+");
+        Matcher matcher = pattern.matcher(text);
+        Set<String> scopes = new LinkedHashSet<>();
+        while (matcher.find()) {
+            String scope = matcher.group();
+            if (!scope.startsWith("http:") && !scope.startsWith("https:")) {
+                scopes.add(scope);
+            }
+        }
+
+        // 未抽取到具体 scope 时，返回配置里的默认 scope。
+        if (scopes.isEmpty()) {
+            return properties.getOauthDefaultScopes();
+        }
+
+        // 返回空格分隔 scope。
+        return String.join(" ", scopes);
+    }
+
+    private String buildAuthorizeUrl(String sourceChatId, String originalMessageId,
+            String senderOpenId, String senderUserId, String scopeText) {
+        // 构造一个轻量事件对象，复用授权服务的 state 保存逻辑。
+        FeishuMessageEvent event = new FeishuMessageEvent(
+                properties.getAppId(),
+                "",
+                "oauth.required",
+                senderOpenId,
+                senderUserId,
+                "user",
+                sourceChatId,
+                "group",
+                originalMessageId,
+                "text",
+                "",
+                List.of()
+        );
+
+        // 数据库里 token 不满足时重新生成授权链接。
+        if (!userOAuthTokenService.tokenHasScopes(senderOpenId, scopeText)) {
+            return userOAuthTokenService.createAuthorizeUrl(event, scopeText);
+        }
+
+        // 理论上走到这里表示数据库已满足 scope，但 CLI 仍报错，返回重新授权兜底链接。
+        return userOAuthTokenService.createAuthorizeUrl(event, scopeText);
     }
 
     private CliStepDecision parseDecision(String answer) {

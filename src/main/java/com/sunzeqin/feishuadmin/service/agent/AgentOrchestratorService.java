@@ -12,7 +12,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Agent 编排服务。
@@ -115,8 +117,8 @@ public class AgentOrchestratorService {
                 return result;
             }
 
-            // 当前工具不需要额外注入系统参数，直接使用模型规划出来的工具调用。
-            ToolCall toolCall = decision.toolCall();
+            // 注入当前飞书事件上下文，方便工具引用原消息和@触发人。
+            ToolCall toolCall = enrichToolCall(event, decision.toolCall());
 
             // 打印工具执行前日志。
             log.info("[阶段4 工具调用] 准备执行工具：消息ID={}，步骤={}，工具={}，入参={}",
@@ -151,6 +153,33 @@ public class AgentOrchestratorService {
         AgentRunResult result = new AgentRunResult(false, "⚠️ 本次任务步骤过多，已停止执行，避免重复操作。");
         memoryService.saveAssistantMessage(event, result.reply());
         return result;
+    }
+
+    private ToolCall enrichToolCall(FeishuMessageEvent event, ToolCall toolCall) {
+        // 空工具调用直接返回。
+        if (toolCall == null) {
+            return null;
+        }
+
+        // 只有飞书 CLI 工具需要注入上下文。
+        if (!"cli.run_skill".equals(toolCall.name())) {
+            return toolCall;
+        }
+
+        // 复制一份参数，避免修改不可变 Map。
+        Map<String, Object> params = new HashMap<>(toolCall.params());
+
+        // 注入原消息 ID，用于卡片或消息 reply 原文。
+        params.put("originalMessageId", event.messageId());
+
+        // 注入发送人 open_id，用于群聊里 @ 对应的人。
+        params.put("senderOpenId", event.openId());
+
+        // 注入发送人 user_id，供个别命令需要 user_id 时使用。
+        params.put("senderUserId", event.userId());
+
+        // 返回新的工具调用对象。
+        return new ToolCall(toolCall.name(), params);
     }
 
 }

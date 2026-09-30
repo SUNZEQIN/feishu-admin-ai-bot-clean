@@ -29,6 +29,21 @@ public class FeishuProperties {
     // 收到消息后的处理中提示文案。
     private String processingReplyText = "⏳ 正在处理，请稍等...";
 
+    // 收到消息后给原消息添加的处理中表情，多个表情用逗号分隔。
+    private String processingReactionTypes = "GET,ROBOT";
+
+    // 飞书 OAuth 回调地址，必须和开放平台后台配置一致。
+    private String oauthRedirectUri = "";
+
+    // 飞书 OAuth 授权页基础地址，国内飞书通常是 https://accounts.feishu.cn。
+    private String oauthAuthorizeBaseUrl = "https://accounts.feishu.cn";
+
+    // 用户授权兜底 scope，缺少具体 scope 时使用。
+    private String oauthDefaultScopes = "offline_access";
+
+    // 用户 token 刷新提前量，单位秒。
+    private int oauthRefreshBeforeSeconds = 600;
+
     // 是否启用 LLM 意图识别；关闭时使用本地规则兜底。
     private boolean llmEnabled = false;
 
@@ -129,6 +144,56 @@ public class FeishuProperties {
     public void setProcessingReplyText(String processingReplyText) {
         // 设置处理中提示文案。
         this.processingReplyText = processingReplyText;
+    }
+
+    public String getProcessingReactionTypes() {
+        // 返回处理中表情配置。
+        return processingReactionTypes;
+    }
+
+    public void setProcessingReactionTypes(String processingReactionTypes) {
+        // 设置处理中表情配置。
+        this.processingReactionTypes = processingReactionTypes;
+    }
+
+    public String getOauthRedirectUri() {
+        // 返回 OAuth 回调地址。
+        return oauthRedirectUri;
+    }
+
+    public void setOauthRedirectUri(String oauthRedirectUri) {
+        // 设置 OAuth 回调地址。
+        this.oauthRedirectUri = oauthRedirectUri;
+    }
+
+    public String getOauthAuthorizeBaseUrl() {
+        // 返回 OAuth 授权页基础地址。
+        return oauthAuthorizeBaseUrl;
+    }
+
+    public void setOauthAuthorizeBaseUrl(String oauthAuthorizeBaseUrl) {
+        // 设置 OAuth 授权页基础地址。
+        this.oauthAuthorizeBaseUrl = oauthAuthorizeBaseUrl;
+    }
+
+    public String getOauthDefaultScopes() {
+        // 返回 OAuth 默认 scope。
+        return oauthDefaultScopes;
+    }
+
+    public void setOauthDefaultScopes(String oauthDefaultScopes) {
+        // 设置 OAuth 默认 scope。
+        this.oauthDefaultScopes = oauthDefaultScopes;
+    }
+
+    public int getOauthRefreshBeforeSeconds() {
+        // 返回 token 提前刷新秒数。
+        return oauthRefreshBeforeSeconds;
+    }
+
+    public void setOauthRefreshBeforeSeconds(int oauthRefreshBeforeSeconds) {
+        // 设置 token 提前刷新秒数，最小值保护为 60 秒。
+        this.oauthRefreshBeforeSeconds = Math.max(60, oauthRefreshBeforeSeconds);
     }
 
     public boolean isLlmEnabled() {
