@@ -78,7 +78,7 @@ public class FeishuProperties {
     private int cliTimeoutSeconds = 60;
 
     // 允许通过 Skill + CLI 执行的业务域。
-    private String cliAllowedDomains = "im,base,docs,calendar,vc,contact,approval";
+    private String cliAllowedDomains = "im,base,docs,calendar,vc,contact,approval,attendance";
 
     // 是否启用电商 MCP 服务。
     private boolean ecommerceMcpEnabled = false;

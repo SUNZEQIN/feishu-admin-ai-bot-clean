@@ -1052,8 +1052,13 @@ public class SkillCliExecutorService {
             return;
         }
 
-        // schema/skills 是只读元命令，用来查询命令结构和内置技能说明，允许执行。
-        if ("schema".equals(commandDomain) || "skills".equals(commandDomain)) {
+        // 根帮助、配置、授权、schema、skills 是只读或诊断元命令，允许执行。
+        if ("--help".equals(commandDomain)
+                || "-h".equals(commandDomain)
+                || "config".equals(commandDomain)
+                || "auth".equals(commandDomain)
+                || "schema".equals(commandDomain)
+                || "skills".equals(commandDomain)) {
             return;
         }
 

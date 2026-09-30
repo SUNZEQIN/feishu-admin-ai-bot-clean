@@ -375,6 +375,13 @@ public class AdminAgentService {
             return "approval";
         }
 
+        // 考勤相关权限。
+        if (normalizedText.contains("考勤") || normalizedText.contains("打卡")
+                || normalizedText.contains("出勤") || normalizedText.contains("班次")
+                || normalizedText.contains("attendance")) {
+            return "attendance";
+        }
+
         // 云盘相关权限。
         if (normalizedText.contains("云盘") || normalizedText.contains("文件")) {
             return "drive";

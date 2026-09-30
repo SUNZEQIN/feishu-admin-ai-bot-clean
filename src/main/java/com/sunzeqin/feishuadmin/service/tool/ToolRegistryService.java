@@ -53,7 +53,7 @@ public class ToolRegistryService {
                 1. cli.run_skill
                    作用：统一执行飞书相关能力，包含群聊、消息、文档、多维表格、日程、会议、审批、通讯录等。
                    参数：domain, goal, sourceChatId, originalMessageId, senderOpenId, senderUserId。
-                   domain 只能是 im、base、docs、calendar、vc、minutes、note、contact、approval、drive、wiki、markdown、mindnotes、whiteboard。
+                   domain 只能是 im、base、docs、calendar、vc、minutes、note、contact、approval、attendance、drive、wiki、markdown、mindnotes、whiteboard。
                    goal 是用户原始目标的完整中文描述。
                    sourceChatId 是当前飞书事件所在群或会话 ID。
                    originalMessageId 是用户原消息 ID，发卡片或消息时优先引用这条原文。
@@ -63,7 +63,7 @@ public class ToolRegistryService {
                 2. feishu.scope_for_domain
                    作用：查询某个飞书业务域在用户身份下需要申请哪些 OAuth scope。
                    参数：domain。
-                   domain 例如 im、base、docs、calendar、vc、contact、approval、drive、wiki、minutes。
+                   domain 例如 im、base、docs、calendar、vc、contact、approval、attendance、drive、wiki、minutes。
                    用途：当用户明确要求“用本人身份 / 以用户身份”执行飞书操作时，可先查询对应模块 scope。
 
                 3. ecommerce.list_tools
