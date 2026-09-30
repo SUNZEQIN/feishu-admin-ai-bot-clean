@@ -210,9 +210,8 @@ public class SkillCliExecutorService {
                 String authorizeUrl = buildAuthorizeUrl(sourceChatId, originalMessageId, senderOpenId,
                         senderUserId, missingScopes);
                 String reply = "需要你授权后才能继续执行。\n\n"
-                        + "授权域：" + missingScopes + "\n"
-                        + "授权链接：" + authorizeUrl + "\n\n"
-                        + "授权链接里已经包含 scope 字段。授权完成后，系统会保存到用户表并定时刷新 token。";
+                        + "请扫描二维码完成授权。\n\n"
+                        + "授权完成后，系统会保存到用户表并定时刷新 token。";
                 return Map.of(
                         "domain", normalizedDomain,
                         "goal", goal,
@@ -276,8 +275,7 @@ public class SkillCliExecutorService {
         // 没有 token 或 scope 不足时直接生成授权链接。
         String authorizeUrl = buildAuthorizeUrl(sourceChatId, originalMessageId, senderOpenId, senderUserId, scopeText);
         String reply = "需要你授权后才能以用户身份继续执行。\n\n"
-                + "授权域：" + scopeText + "\n"
-                + "授权链接：" + authorizeUrl + "\n\n"
+                + "请扫描二维码完成授权。\n\n"
                 + "授权完成后，系统会保存到用户表并定时刷新 token。";
 
         // 返回授权结果，让外层直接回复给用户。

@@ -390,6 +390,10 @@ public class UserOAuthTokenService {
 
         // 未找到 state 时抛错。
         if (states.isEmpty()) {
+            // 如果收到的 state 比系统生成的 32 位短，通常是飞书消息过长导致授权链接被截断。
+            int prefixMatchCount = countStatePrefix(state);
+            log.warn("[阶段4 工具调用] OAuth state未找到：收到state长度={}，疑似前缀匹配数量={}，可能原因=授权链接被截断或链接已失效",
+                    state.length(), prefixMatchCount);
             throw new IllegalArgumentException("OAuth state 不存在或已过期");
         }
 
@@ -401,6 +405,25 @@ public class UserOAuthTokenService {
 
         // 返回 state。
         return oauthState;
+    }
+
+    private int countStatePrefix(String state) {
+        // 空 state 不查询。
+        if (state == null || state.isBlank()) {
+            return 0;
+        }
+
+        // 查询是否存在以收到 state 为前缀的记录，用来判断链接是否被截断。
+        Integer count = jdbcTemplate.queryForObject("""
+                        SELECT COUNT(1)
+                        FROM feishu_oauth_state
+                        WHERE state LIKE CONCAT(?, '%')
+                        """,
+                Integer.class,
+                state);
+
+        // queryForObject 理论上不会返回 null，这里做兜底。
+        return count == null ? 0 : count;
     }
 
     private boolean containsAllScopes(String ownedScopeText, String requiredScopeText) {

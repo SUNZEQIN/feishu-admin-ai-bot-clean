@@ -39,9 +39,12 @@ public class AdminAgentService {
     // 用户身份 scope 映射服务，用来按用户提到的模块生成授权 scope。
     private final FeishuUserScopeMappingService scopeMappingService;
 
+    // 二维码服务，用来把 OAuth 授权链接转成二维码图片。
+    private final QrCodeService qrCodeService;
+
     public AdminAgentService(FeishuProperties properties, FeishuOpenApiService openApi,
             AgentOrchestratorService orchestrator, UserOAuthTokenService userOAuthTokenService,
-            FeishuUserScopeMappingService scopeMappingService) {
+            FeishuUserScopeMappingService scopeMappingService, QrCodeService qrCodeService) {
         // 保存配置对象。
         this.properties = properties;
         // 保存 OpenAPI 服务。
@@ -52,6 +55,8 @@ public class AdminAgentService {
         this.userOAuthTokenService = userOAuthTokenService;
         // 保存用户身份 scope 映射服务。
         this.scopeMappingService = scopeMappingService;
+        // 保存二维码服务。
+        this.qrCodeService = qrCodeService;
     }
 
     /**
@@ -88,12 +93,21 @@ public class AdminAgentService {
 
             // 用户主动要求授权链接时，直接生成 OAuth 链接，不进入 LLM，避免模型误判为“不支持授权”。
             if (authorizationQuestion(event.text())) {
-                safeReplyToSender(event, authorizationReply(event));
+                AuthorizationReply authorizationReply = authorizationReply(event);
+                safeReplyAuthorizationQr(event, authorizationReply.text(), authorizationReply.authorizeUrl());
                 return;
             }
 
             // 交给 Agent 编排器执行多步循环。
             AgentRunResult result = orchestrator.run(event);
+
+            // 授权类结果不直接发链接，统一转成二维码回复。
+            if (!result.authorizeUrl().isBlank()) {
+                log.info("[阶段8 回复飞书] 授权结果准备发送二维码：消息ID={}，授权链接长度={}",
+                        event.messageId(), result.authorizeUrl().length());
+                safeReplyAuthorizationQr(event, result.reply(), result.authorizeUrl());
+                return;
+            }
 
             // 如果工具已经用飞书卡片或飞书消息把结果发出，这里只追加一条简短确认，避免用户不知道已经成功。
             if (cardOrMessageAlreadySent(result)) {
@@ -141,6 +155,26 @@ public class AdminAgentService {
                 log.error("[阶段8 回复飞书] 兜底回复仍失败：消息ID={}，错误={}",
                         event.messageId(), secondError.getMessage(), secondError);
             }
+        }
+    }
+
+    private void safeReplyAuthorizationQr(FeishuMessageEvent event, String text, String authorizeUrl) {
+        try {
+            // 先回复简短说明，不包含授权链接。
+            replyToSender(event, cleanReplyText(text));
+
+            // 生成二维码图片。
+            byte[] qrCodeBytes = qrCodeService.generatePng(authorizeUrl);
+
+            // 上传二维码图片，拿到飞书 image_key。
+            String imageKey = openApi.uploadMessageImage(qrCodeBytes, "feishu-oauth-qrcode.png");
+
+            // 用二维码图片回复原消息。
+            openApi.replyImage(event.messageId(), imageKey);
+        } catch (Exception e) {
+            // 二维码发送失败时不回退明文链接，避免再次触发链接截断。
+            log.error("[阶段8 回复飞书] 授权二维码发送失败：消息ID={}，错误={}", event.messageId(), e.getMessage(), e);
+            safeReplyToSender(event, "⚠️ 授权二维码发送失败，请管理员按消息 ID 查看服务日志：" + event.messageId());
         }
     }
 
@@ -249,7 +283,7 @@ public class AdminAgentService {
                 || normalizedText.contains("发起授权");
     }
 
-    private String authorizationReply(FeishuMessageEvent event) {
+    private AuthorizationReply authorizationReply(FeishuMessageEvent event) {
         // 根据用户话术判断授权模块，例如日程、消息、文档、多维表格。
         String domain = detectAuthorizationDomain(event.text());
 
@@ -266,10 +300,25 @@ public class AdminAgentService {
         String authorizeUrl = userOAuthTokenService.createAuthorizeUrl(event, scopeText);
 
         // 返回授权说明。
-        return "需要你授权后才能以用户身份执行。\n\n"
-                + "授权域：" + scopeText + "\n"
-                + "授权链接：" + authorizeUrl + "\n\n"
+        String text = "需要你授权后才能以用户身份执行。\n\n"
+                + "请扫描二维码完成授权。\n\n"
                 + "授权完成后，系统会保存到用户表并定时刷新 token。";
+
+        // 返回授权说明和内部使用的授权链接。
+        return new AuthorizationReply(text, authorizeUrl);
+    }
+
+    /**
+     * 授权回复数据。
+     *
+     * <p>作用：文本给用户看，授权链接只用于生成二维码，不直接展示。</p>
+     *
+     * @param text         用户可见文本
+     * @param authorizeUrl 授权链接
+     *
+     * @author sunzeqin
+     */
+    private record AuthorizationReply(String text, String authorizeUrl) {
     }
 
     private String detectAuthorizationDomain(String text) {

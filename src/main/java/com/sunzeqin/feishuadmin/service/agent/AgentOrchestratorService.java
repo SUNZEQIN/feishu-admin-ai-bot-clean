@@ -139,9 +139,10 @@ public class AgentOrchestratorService {
             // 如果工具已经返回授权链接，直接回复用户，不再交给大模型二次解释，避免误说“不支持授权”。
             String authorizeReply = authorizeReplyFromToolResult(result);
             if (!authorizeReply.isBlank()) {
+                String authorizeUrl = authorizeUrlFromToolResult(result);
                 log.info("[阶段4 工具调用] 授权链接已生成，直接结束流程：消息ID={}，步骤={}，工具={}",
                         event.messageId(), step, result.tool());
-                AgentRunResult runResult = new AgentRunResult(true, authorizeReply);
+                AgentRunResult runResult = new AgentRunResult(true, authorizeReply, authorizeUrl);
                 memoryService.saveAssistantMessage(event, runResult.reply());
                 return runResult;
             }
@@ -172,8 +173,7 @@ public class AgentOrchestratorService {
         }
 
         // 只有真正包含授权链接时，才直接返回。
-        Object authorizeUrl = result.data().get("authorizeUrl");
-        if (authorizeUrl == null || authorizeUrl.toString().isBlank()) {
+        if (authorizeUrlFromToolResult(result).isBlank()) {
             return "";
         }
 
@@ -183,12 +183,26 @@ public class AgentOrchestratorService {
             return finalReply.toString();
         }
 
-        // 没有 finalReply 时组装兜底回复。
-        Object requiredScopes = result.data().get("requiredScopes");
+        // 没有 finalReply 时组装兜底回复，用户侧不展示冗长 scope，避免飞书消息过长截断授权链接。
         return "需要你授权后才能继续执行。\n\n"
-                + "授权域：" + (requiredScopes == null ? "" : requiredScopes) + "\n"
-                + "授权链接：" + authorizeUrl + "\n\n"
+                + "请扫描二维码完成授权。\n\n"
                 + "授权完成后，系统会保存到用户表并定时刷新 token。";
+    }
+
+    private String authorizeUrlFromToolResult(ToolResult result) {
+        // 空结果直接返回空字符串。
+        if (result == null || result.data() == null || result.data().isEmpty()) {
+            return "";
+        }
+
+        // 读取授权链接。
+        Object authorizeUrl = result.data().get("authorizeUrl");
+        if (authorizeUrl == null || authorizeUrl.toString().isBlank()) {
+            return "";
+        }
+
+        // 返回授权链接。
+        return authorizeUrl.toString();
     }
 
     private ToolCall enrichToolCall(FeishuMessageEvent event, ToolCall toolCall) {

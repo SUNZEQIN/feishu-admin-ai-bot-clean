@@ -7,6 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -92,6 +94,102 @@ public class FeishuOpenApiService {
         ensureOk(response, "回复飞书消息失败");
 
         // 返回新消息 ID，方便上层删除“正在处理”这类临时消息。
+        return response.path("data").path("message_id").asText("");
+    }
+
+    /**
+     * 上传飞书消息图片。
+     *
+     * @param imageBytes 图片字节
+     * @param fileName   文件名
+     * @return image_key
+     */
+    public String uploadMessageImage(byte[] imageBytes, String fileName) {
+        // 图片内容不能为空。
+        if (imageBytes == null || imageBytes.length == 0) {
+            throw new IllegalArgumentException("上传飞书图片失败：图片内容为空");
+        }
+
+        // 飞书图片上传接口需要 multipart/form-data。
+        MultipartBodyBuilder builder = new MultipartBodyBuilder();
+        builder.part("image_type", "message");
+        builder.part("image", new ByteArrayResource(imageBytes) {
+            @Override
+            public String getFilename() {
+                return fileName == null || fileName.isBlank() ? "oauth-qrcode.png" : fileName;
+            }
+        }).contentType(MediaType.IMAGE_PNG);
+
+        // 打印上传摘要，不打印图片二进制。
+        log.info("[阶段8 回复飞书] 飞书图片上传请求：文件名={}，大小={}字节",
+                fileName, imageBytes.length);
+
+        // 调用飞书上传图片接口。
+        JsonNode response = restClient.post()
+                .uri("/open-apis/im/v1/images")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenantAccessToken())
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(builder.build())
+                .retrieve()
+                .body(JsonNode.class);
+
+        // 打印响应摘要。
+        log.info("[阶段8 回复飞书] 飞书图片上传响应摘要：状态码={}，消息={}，imageKey是否存在={}",
+                response.path("code").asInt(-1),
+                response.path("msg").asText(""),
+                !response.path("data").path("image_key").asText("").isBlank());
+        log.debug("[阶段8 回复飞书] 飞书图片上传完整响应：响应={}", response);
+
+        // 检查上传结果。
+        ensureOk(response, "上传飞书图片失败");
+
+        // 返回 image_key。
+        return response.path("data").path("image_key").asText("");
+    }
+
+    /**
+     * 用图片回复飞书消息。
+     *
+     * @param messageId 原消息 ID
+     * @param imageKey  飞书图片 key
+     * @return 飞书新回复消息 ID
+     */
+    public String replyImage(String messageId, String imageKey) {
+        // 图片 key 不能为空。
+        if (imageKey == null || imageKey.isBlank()) {
+            throw new IllegalArgumentException("回复飞书图片失败：image_key为空");
+        }
+
+        // 组装图片消息体。
+        Map<String, Object> body = Map.of("msg_type", "image",
+                "content", jsonUtils.write(Map.of("image_key", imageKey)));
+
+        // 打印请求摘要。
+        log.info("[阶段8 回复飞书] 飞书图片回复请求：消息ID={}，imageKey是否存在={}",
+                messageId, !imageKey.isBlank());
+        log.debug("[阶段8 回复飞书] 飞书图片回复完整请求：消息ID={}，请求体={}", messageId, body);
+
+        // 调用飞书回复消息接口。
+        JsonNode response = restClient.post()
+                .uri("/open-apis/im/v1/messages/{message_id}/reply", messageId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenantAccessToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(JsonNode.class);
+
+        // 打印响应摘要。
+        log.info("[阶段8 回复飞书] 飞书图片回复响应摘要：消息ID={}，状态码={}，消息={}，新消息ID={}",
+                messageId,
+                response.path("code").asInt(-1),
+                response.path("msg").asText(""),
+                response.path("data").path("message_id").asText(""));
+        log.debug("[阶段8 回复飞书] 飞书图片回复完整响应：消息ID={}，响应={}", messageId, response);
+
+        // 检查回复结果。
+        ensureOk(response, "回复飞书图片失败");
+
+        // 返回新消息 ID。
         return response.path("data").path("message_id").asText("");
     }
 
