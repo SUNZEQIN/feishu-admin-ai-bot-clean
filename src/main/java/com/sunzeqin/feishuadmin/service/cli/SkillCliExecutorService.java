@@ -324,11 +324,10 @@ public class SkillCliExecutorService {
             throw new IllegalArgumentException("CLI 命令必须以 lark-cli 开头");
         }
 
-        // 禁止危险 shell 符号。
+        // 禁止把 shell 控制符当成独立参数传进来。
+        // 注意：飞书卡片 JSON、Markdown、DocxXML 里可能合法出现 <font>、>、; 等字符，不能按 contains 粗暴拦截。
         for (String part : command) {
-            if (part.contains("|") || part.contains(">") || part.contains("<")
-                    || part.contains(";") || part.contains("&&") || part.contains("||")
-                    || part.contains("`") || part.contains("$(")) {
+            if (forbiddenShellControlArgument(part)) {
                 throw new IllegalArgumentException("CLI 命令包含不允许的 shell 符号：" + part);
             }
         }
@@ -350,6 +349,25 @@ public class SkillCliExecutorService {
 
         // 返回规范化命令。
         return normalized;
+    }
+
+    private boolean forbiddenShellControlArgument(String part) {
+        // 空参数不属于 shell 控制符。
+        if (part == null || part.isBlank()) {
+            return false;
+        }
+
+        // ProcessBuilder 不经过 shell，普通文本里的 <font>、JSON、Markdown 不会被当成重定向或管道。
+        // 这里只拦截模型把 shell 控制符单独放成参数的情况。
+        String value = part.trim();
+        return "|".equals(value)
+                || ">".equals(value)
+                || ">>".equals(value)
+                || "<".equals(value)
+                || "<<".equals(value)
+                || ";".equals(value)
+                || "&&".equals(value)
+                || "||".equals(value);
     }
 
     private void normalizeIdentityAsBot(List<String> command) {
