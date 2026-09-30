@@ -351,14 +351,14 @@ public class SkillCliExecutorService {
 
     private CliCommandResult executeCommand(List<String> command) {
         try {
-            // 执行业务 CLI 前，先把最新 tenant_access_token 写入 lark-cli，避免 bot token_missing。
-            prepareTenantAccessTokenForCli(command);
+            // 执行业务 CLI 前，先获取最新 tenant_access_token，后续会显式注入到子进程环境。
+            String tenantAccessToken = prepareTenantAccessTokenForCli(command);
 
             // 打印 CLI 执行入参。
             log.info("SkillCLI执行命令：命令={}", command);
 
-            // 创建 CLI 进程。业务命令会使用受控环境，避免外部凭据模式覆盖本地 token store。
-            Process process = buildProcess(command).start();
+            // 创建 CLI 进程。业务命令会使用受控环境，明确注入 bot token。
+            Process process = buildProcess(command, tenantAccessToken).start();
 
             // 异步读取标准输出，避免输出较多时进程缓冲区写满导致卡死。
             CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(
@@ -401,20 +401,20 @@ public class SkillCliExecutorService {
         }
     }
 
-    private void prepareTenantAccessTokenForCli(List<String> command) {
+    private String prepareTenantAccessTokenForCli(List<String> command) {
         // 非 lark-cli 命令不处理；正常情况下不会出现。
         if (command == null || command.isEmpty()) {
-            return;
+            return "";
         }
 
         // 只处理配置里的 lark-cli 命令。
         if (!properties.getCliCommand().equals(command.get(0))) {
-            return;
+            return "";
         }
 
         // config/auth/help/schema/skills 这类命令不需要 bot token，避免无意义写入。
         if (!needTenantAccessToken(command)) {
-            return;
+            return "";
         }
 
         // appId 不能为空，否则 lark-cli 不知道 token 属于哪个应用。
@@ -428,8 +428,11 @@ public class SkillCliExecutorService {
             throw new IllegalStateException("写入 lark-cli tenant_access_token 失败：tenant_access_token 为空");
         }
 
-        // 把 token 写入 lark-cli 的本地 token store。
+        // 把 token 写入 lark-cli 的本地 token store，兼容需要读取 credential-store 的命令。
         setTenantAccessToken(token);
+
+        // 返回 token，后续会直接注入到业务命令环境变量里，避免 lark-cli 找不到 bot token。
+        return token;
     }
 
     private boolean needTenantAccessToken(List<String> command) {
@@ -517,7 +520,7 @@ public class SkillCliExecutorService {
         }
     }
 
-    private ProcessBuilder buildProcess(List<String> command) {
+    private ProcessBuilder buildProcess(List<String> command, String tenantAccessToken) {
         // 创建普通进程构造器。
         ProcessBuilder processBuilder = new ProcessBuilder(command);
 
@@ -532,14 +535,26 @@ public class SkillCliExecutorService {
         // 明确告诉 lark-cli 当前应用 ID，方便它定位刚写入的 tenant_access_token。
         environment.put("LARKSUITE_CLI_APP_ID", properties.getAppId());
 
+        // 传入应用密钥。这里不打印密钥，只给 lark-cli 子进程使用。
+        environment.put("LARKSUITE_CLI_APP_SECRET", properties.getAppSecret());
+
+        // 直接传入本次 Java 获取到的 tenant_access_token，避免 lark-cli 读取 token store 失败。
+        environment.put("LARKSUITE_CLI_TENANT_ACCESS_TOKEN", tenantAccessToken);
+
         // 管理员机器人项目统一使用 bot 身份。
         environment.put("LARKSUITE_CLI_DEFAULT_AS", "bot");
 
-        // 移除 app_secret，避免 lark-cli 进入外部凭据模式后忽略本地 token store。
-        environment.remove("LARKSUITE_CLI_APP_SECRET");
+        // 强制只允许 bot 身份，避免 CLI 在 user/bot 之间自动切换。
+        environment.put("LARKSUITE_CLI_STRICT_MODE", "bot");
+
+        // 不使用 credential-store 作为 token 来源，优先使用本次注入的环境变量 token。
+        environment.remove("LARKSUITE_CLI_TENANT_ACCESS_TOKEN_SOURCE");
+
+        // 关闭 CLI 更新提示，减少日志噪音。
+        environment.put("LARKSUITE_CLI_NO_UPDATE_NOTIFIER", "1");
 
         // 打印受控环境说明，不打印密钥和 token。
-        log.info("SkillCLI业务命令环境已调整：appId={}，默认身份=bot，已移除LARKSUITE_CLI_APP_SECRET，原因=优先使用本地tenant_access_token",
+        log.info("SkillCLI业务命令环境已调整：appId={}，默认身份=bot，已注入tenant_access_token，已启用bot严格模式",
                 properties.getAppId());
 
         // 返回处理后的进程构造器。
