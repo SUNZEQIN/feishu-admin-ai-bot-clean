@@ -14,6 +14,20 @@ CREATE TABLE IF NOT EXISTS agent_conversation_memory (
     KEY idx_memory_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent会话记忆表';
 
+CREATE TABLE IF NOT EXISTS agent_conversation_summary (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    memory_scope VARCHAR(32) NOT NULL COMMENT '记忆范围：GROUP=群聊，PRIVATE=私聊',
+    memory_key VARCHAR(255) NOT NULL COMMENT '记忆键：当前使用chat_id',
+    chat_id VARCHAR(128) NOT NULL DEFAULT '' COMMENT '飞书会话ID',
+    summary MEDIUMTEXT NOT NULL COMMENT '压缩后的历史上下文摘要',
+    compressed_message_count INT NOT NULL DEFAULT 0 COMMENT '累计压缩消息条数',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_memory_scope_key (memory_scope, memory_key),
+    KEY idx_summary_chat_id (chat_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent会话压缩摘要表';
+
 CREATE TABLE IF NOT EXISTS feishu_user_oauth_token (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     app_id VARCHAR(128) NOT NULL COMMENT '飞书应用ID',

@@ -65,6 +65,18 @@ public class FeishuProperties {
     // 每个“会话 + 用户”最多保留多少条记忆消息。
     private int memoryMaxMessages = 20;
 
+    // 触发会话压缩的消息条数阈值。
+    private int memoryCompressThreshold = 20;
+
+    // 压缩后继续保留的最近消息条数。
+    private int memoryRecentMessages = 8;
+
+    // 每次最多压缩多少条旧消息。
+    private int memoryCompressBatchSize = 12;
+
+    // 会话摘要最大字符数，超过后保留后半段。
+    private int memorySummaryMaxChars = 4000;
+
     // 是否启用 Skill + CLI 兜底执行器。
     private boolean cliEnabled = true;
 
@@ -264,6 +276,46 @@ public class FeishuProperties {
     public void setMemoryMaxMessages(int memoryMaxMessages) {
         // 设置最大记忆消息条数，最小值保护为 2。
         this.memoryMaxMessages = Math.max(2, memoryMaxMessages);
+    }
+
+    public int getMemoryCompressThreshold() {
+        // 返回触发压缩的消息条数。
+        return Math.max(getMemoryRecentMessages() + 2, memoryCompressThreshold);
+    }
+
+    public void setMemoryCompressThreshold(int memoryCompressThreshold) {
+        // 设置触发压缩的消息条数，最小值保护为 4。
+        this.memoryCompressThreshold = Math.max(4, memoryCompressThreshold);
+    }
+
+    public int getMemoryRecentMessages() {
+        // 返回压缩后保留的最近消息条数。
+        return Math.max(2, memoryRecentMessages);
+    }
+
+    public void setMemoryRecentMessages(int memoryRecentMessages) {
+        // 设置压缩后保留的最近消息条数，最小值保护为 2。
+        this.memoryRecentMessages = Math.max(2, memoryRecentMessages);
+    }
+
+    public int getMemoryCompressBatchSize() {
+        // 返回单次压缩的最大消息条数。
+        return Math.max(2, memoryCompressBatchSize);
+    }
+
+    public void setMemoryCompressBatchSize(int memoryCompressBatchSize) {
+        // 设置单次压缩的最大消息条数，最小值保护为 2。
+        this.memoryCompressBatchSize = Math.max(2, memoryCompressBatchSize);
+    }
+
+    public int getMemorySummaryMaxChars() {
+        // 返回摘要最大字符数。
+        return Math.max(500, memorySummaryMaxChars);
+    }
+
+    public void setMemorySummaryMaxChars(int memorySummaryMaxChars) {
+        // 设置摘要最大字符数，最小值保护为 500。
+        this.memorySummaryMaxChars = Math.max(500, memorySummaryMaxChars);
     }
 
     public boolean isCliEnabled() {
