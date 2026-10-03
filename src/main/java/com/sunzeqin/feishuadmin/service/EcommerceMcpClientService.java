@@ -3,10 +3,13 @@ package com.sunzeqin.feishuadmin.service;
 import com.sunzeqin.feishuadmin.config.FeishuProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -27,12 +30,21 @@ public class EcommerceMcpClientService {
     // HTTP 客户端构造器。
     private final RestClient.Builder restClientBuilder;
 
+    // 统一带连接和读取超时的请求工厂，避免电商 MCP 卡住时把工具调用线程占死。
+    private final ClientHttpRequestFactory requestFactory;
+
     public EcommerceMcpClientService(FeishuProperties properties, RestClient.Builder restClientBuilder) {
         // 保存配置对象。
         this.properties = properties;
 
         // 保存 RestClient 构造器。
         this.restClientBuilder = restClientBuilder;
+
+        // 创建带超时的请求工厂，超时时间来自配置。
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(properties.getEcommerceMcpConnectTimeoutSeconds()));
+        factory.setReadTimeout(Duration.ofSeconds(properties.getEcommerceMcpReadTimeoutSeconds()));
+        this.requestFactory = factory;
     }
 
     public Map<String, Object> listTools() {
@@ -46,6 +58,7 @@ public class EcommerceMcpClientService {
         @SuppressWarnings("unchecked")
         Map<String, Object> response = restClientBuilder.clone()
                 .baseUrl(properties.getEcommerceMcpBaseUrl())
+                .requestFactory(requestFactory)
                 .build()
                 .get()
                 .uri("/mcp/tools/list")
@@ -78,6 +91,7 @@ public class EcommerceMcpClientService {
         @SuppressWarnings("unchecked")
         Map<String, Object> response = restClientBuilder.clone()
                 .baseUrl(properties.getEcommerceMcpBaseUrl())
+                .requestFactory(requestFactory)
                 .build()
                 .post()
                 .uri("/mcp/tools/call")

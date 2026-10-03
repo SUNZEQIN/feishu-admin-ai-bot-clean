@@ -9,9 +9,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 
@@ -51,8 +53,14 @@ public class FeishuOpenApiService {
     public FeishuOpenApiService(FeishuProperties properties, RestClient.Builder builder, JsonUtils jsonUtils) {
         // 保存飞书配置。
         this.properties = properties;
-        // 创建带飞书 baseUrl 的 RestClient。
-        this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
+
+        // 创建带超时的请求工厂：飞书接口变慢时不能让回调线程或业务线程无限等待。
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(properties.getOpenApiConnectTimeoutSeconds()));
+        requestFactory.setReadTimeout(Duration.ofSeconds(properties.getOpenApiReadTimeoutSeconds()));
+
+        // 创建带飞书 baseUrl 和超时的 RestClient。
+        this.restClient = builder.baseUrl(properties.getBaseUrl()).requestFactory(requestFactory).build();
         // 保存 JSON 工具类。
         this.jsonUtils = jsonUtils;
     }

@@ -211,25 +211,30 @@ public class AgentOrchestratorService {
             return null;
         }
 
-        // 只有飞书 CLI 工具需要注入上下文。
-        if (!"cli.run_skill".equals(toolCall.name())) {
-            return toolCall;
-        }
-
         // 复制一份参数，避免修改不可变 Map。
         Map<String, Object> params = new HashMap<>(toolCall.params());
 
-        // 注入原消息 ID，用于卡片或消息 reply 原文。
-        params.put("originalMessageId", event.messageId());
+        // 注入来源会话 ID，工具层权限校验要用它判断会话是否在白名单里。
+        putIfPresent(params, "sourceChatId", event.chatId());
 
-        // 注入发送人 open_id，用于群聊里 @ 对应的人。
-        params.put("senderOpenId", event.openId());
+        // 注入原消息 ID，用于卡片或消息 reply 原文。
+        putIfPresent(params, "originalMessageId", event.messageId());
+
+        // 注入发送人 open_id，用于工具层权限校验和群聊里 @ 对应的人。
+        putIfPresent(params, "senderOpenId", event.openId());
 
         // 注入发送人 user_id，供个别命令需要 user_id 时使用。
-        params.put("senderUserId", event.userId());
+        putIfPresent(params, "senderUserId", event.userId());
 
-        // 返回新的工具调用对象。
+        // 所有工具都注入真实事件上下文，模型无法再自己编造群 ID 或调用者身份。
         return new ToolCall(toolCall.name(), params);
+    }
+
+    private void putIfPresent(Map<String, Object> params, String key, String value) {
+        // 空值不写入：ToolCall 内部使用 Map.copyOf，写入 null 会直接抛异常。
+        if (value != null && !value.isBlank()) {
+            params.put(key, value);
+        }
     }
 
 }

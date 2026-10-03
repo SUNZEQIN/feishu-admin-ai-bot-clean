@@ -1,16 +1,31 @@
 package com.sunzeqin.feishuadmin.service.tool;
 
+import com.sunzeqin.feishuadmin.config.FeishuProperties;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolCall;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
 import com.sunzeqin.feishuadmin.service.EcommerceMcpClientService;
 import com.sunzeqin.feishuadmin.service.FeishuUserScopeMappingService;
 import com.sunzeqin.feishuadmin.service.cli.SkillCliExecutorService;
 import com.sunzeqin.feishuadmin.utils.LlmErrorUtils;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 工具注册与执行服务。
@@ -18,12 +33,24 @@ import java.util.Map;
  * <p>作用：集中管理 Agent 可以调用的工具。LLM 只输出工具名和参数，
  * 真实执行统一在这里完成，避免模型直接碰飞书 OpenAPI。</p>
  *
+ * <p>执行前统一做三件事：工具白名单校验、调用者权限校验、超时保护。</p>
+ *
  * @author sunzeqin
  */
 @Service
 public class ToolRegistryService {
     // 当前工具注册表使用的日志对象。
     private static final Logger log = LoggerFactory.getLogger(ToolRegistryService.class);
+
+    // 当前系统允许执行的全部工具名，未知工具一律拒绝，防止模型编造工具调用。
+    private static final Set<String> KNOWN_TOOLS = Set.of(
+            "cli.run_skill",
+            "feishu.scope_for_domain",
+            "ecommerce.list_tools",
+            "ecommerce.call_tool");
+
+    // 从工具说明文本里提取工具名的正则，用于启动自检说明与执行是否一致。
+    private static final Pattern TOOL_NAME_IN_DESCRIPTION = Pattern.compile("(?m)^\\s*\\d+\\.\\s*([a-z][a-z0-9_.]+)\\s*$");
 
     // Skill + CLI 执行服务，飞书相关能力统一由它处理。
     private final SkillCliExecutorService skillCliExecutor;
@@ -34,8 +61,18 @@ public class ToolRegistryService {
     // 飞书用户身份 scope 映射服务，负责查询业务域需要的授权范围。
     private final FeishuUserScopeMappingService scopeMappingService;
 
+    // 工具调用权限校验服务，负责判断调用者和会话是否有权限。
+    private final ToolPermissionService toolPermissionService;
+
+    // 飞书配置，用来读取工具超时时间。
+    private final FeishuProperties properties;
+
+    // 工具执行线程池：工具调用放在独立线程里执行，主线程只负责等待超时。
+    private final ExecutorService toolExecutor;
+
     public ToolRegistryService(SkillCliExecutorService skillCliExecutor, EcommerceMcpClientService ecommerceMcpClient,
-            FeishuUserScopeMappingService scopeMappingService) {
+            FeishuUserScopeMappingService scopeMappingService, ToolPermissionService toolPermissionService,
+            FeishuProperties properties) {
         // 保存 Skill + CLI 执行服务。
         this.skillCliExecutor = skillCliExecutor;
 
@@ -44,8 +81,57 @@ public class ToolRegistryService {
 
         // 保存用户身份 scope 映射服务。
         this.scopeMappingService = scopeMappingService;
+
+        // 保存权限校验服务。
+        this.toolPermissionService = toolPermissionService;
+
+        // 保存飞书配置。
+        this.properties = properties;
+
+        // 创建工具执行线程池。线程数固定且带名字，方便排查卡在哪个工具上。
+        this.toolExecutor = Executors.newFixedThreadPool(Math.max(2, properties.getToolExecutorThreads()),
+                namedDaemonFactory());
     }
 
+    /**
+     * 启动自检：工具说明文本和执行白名单必须完全一致。
+     *
+     * <p>工具说明是给大模型看的，执行白名单是真正能跑的工具。两边一旦漂移，
+     * 就会出现“模型看得到但执行不了”或“能执行但模型不知道”的隐性故障，
+     * 所以启动时直接对账并打日志。</p>
+     */
+    @PostConstruct
+    void verifyToolCatalog() {
+        // 从工具说明里解析出工具名。
+        Set<String> described = new LinkedHashSet<>();
+        Matcher matcher = TOOL_NAME_IN_DESCRIPTION.matcher(toolDescriptions());
+        while (matcher.find()) {
+            described.add(matcher.group(1));
+        }
+
+        // 只在说明里、不在白名单里的工具：模型可能选到但执行不了。
+        Set<String> describeOnly = new LinkedHashSet<>(described);
+        describeOnly.removeAll(KNOWN_TOOLS);
+
+        // 只在白名单里、没写进说明的工具：模型不知道能用。
+        Set<String> dispatchOnly = new LinkedHashSet<>(KNOWN_TOOLS);
+        dispatchOnly.removeAll(described);
+
+        // 两边一致时打印一条 INFO 即可。
+        if (describeOnly.isEmpty() && dispatchOnly.isEmpty()) {
+            log.info("[阶段4 工具调用] 工具清单自检通过：工具数量={}，工具={}", described.size(), described);
+            return;
+        }
+
+        // 不一致时打 ERROR，提醒维护者补齐，避免线上出现难排查的“工具不存在”。
+        log.error("[阶段4 工具调用] 工具清单不一致：仅写在说明里={}，仅可执行但未写说明={}", describeOnly, dispatchOnly);
+    }
+
+    /**
+     * 给大模型看的工具清单。
+     *
+     * @return 工具说明文本
+     */
     public String toolDescriptions() {
         // 返回给 LLM 看的工具清单，LLM 只能从这些工具里选择下一步。
         return """
@@ -80,41 +166,41 @@ public class ToolRegistryService {
                 """;
     }
 
+    /**
+     * 执行一次工具调用。
+     *
+     * @param call 工具调用
+     * @return 工具结果，任何异常都转成 failed，让 Agent 继续决策
+     */
     public ToolResult execute(ToolCall call) {
         // 打印工具调用入参，方便排查 Agent 到底让系统做了什么。
         log.info("[阶段4 工具调用] 开始：工具名称={}，入参={}", call.name(), call.params());
 
-        try {
-            // 根据工具名称分发到 Skill + CLI 飞书统一入口。
-            if ("cli.run_skill".equals(call.name())) {
-                ToolResult result = runSkill(call);
-                logResult(result);
-                return result;
-            }
+        // 工具名为空时无法分发。
+        if (call.name().isBlank()) {
+            ToolResult result = ToolResult.failed(call.name(), "工具名称为空，已拒绝执行");
+            logResult(result);
+            return result;
+        }
 
-            // 根据工具名称分发到飞书用户身份 scope 映射查询。
-            if ("feishu.scope_for_domain".equals(call.name())) {
-                ToolResult result = scopeForDomain(call);
-                logResult(result);
-                return result;
-            }
-
-            // 根据工具名称分发到电商 MCP 工具列表。
-            if ("ecommerce.list_tools".equals(call.name())) {
-                ToolResult result = listEcommerceTools(call);
-                logResult(result);
-                return result;
-            }
-
-            // 根据工具名称分发到电商 MCP 工具调用。
-            if ("ecommerce.call_tool".equals(call.name())) {
-                ToolResult result = callEcommerceTool(call);
-                logResult(result);
-                return result;
-            }
-
-            // 不认识的工具直接失败，防止模型编造工具。
+        // 第一步：白名单校验。不是注册过的工具一律拒绝，防止模型编造工具名。
+        if (!KNOWN_TOOLS.contains(call.name())) {
             ToolResult result = ToolResult.failed(call.name(), "未知工具：" + call.name());
+            logResult(result);
+            return result;
+        }
+
+        // 第二步：权限校验。判断调用者和会话是否有权限执行。
+        ToolPermissionService.Decision permission = toolPermissionService.check(call);
+        if (!permission.allowed()) {
+            ToolResult result = ToolResult.failed(call.name(), permission.reason());
+            logResult(result);
+            return result;
+        }
+
+        // 第三步：带超时执行。工具卡住时不能让 Agent 循环一起挂死。
+        try {
+            ToolResult result = executeWithTimeout(call);
             logResult(result);
             return result;
         } catch (Exception e) {
@@ -127,11 +213,74 @@ public class ToolRegistryService {
                 message = LlmErrorUtils.insufficientBalanceReply();
             }
 
-            // 构造失败结果。
-            ToolResult result = ToolResult.failed(call.name(), message);
+            // 空消息兜底成类名，避免用户只看到 null。
+            ToolResult result = ToolResult.failed(call.name(),
+                    message == null || message.isBlank() ? e.getClass().getSimpleName() : message);
             logResult(result);
             return result;
         }
+    }
+
+    private ToolResult executeWithTimeout(ToolCall call) throws Exception {
+        // 读取配置的超时时间，最小 1 秒。
+        int timeoutSeconds = Math.max(1, properties.getToolTimeoutSeconds());
+
+        // 把工具执行交给独立线程池，主线程只负责等待。
+        Future<ToolResult> future;
+        try {
+            future = toolExecutor.submit(() -> dispatch(call));
+        } catch (RejectedExecutionException e) {
+            // 线程池已满时直接失败，不再阻塞 Agent 循环。
+            return ToolResult.failed(call.name(), "工具执行队列已满，请稍后再试");
+        }
+
+        try {
+            // 等待工具执行完成。
+            return future.get(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            // 超时后取消任务并返回可读原因，让 Agent 决定是否重试或换方案。
+            future.cancel(true);
+            log.warn("[阶段4 工具调用] 执行超时：工具名称={}，超时时间={}秒", call.name(), timeoutSeconds);
+            return ToolResult.failed(call.name(),
+                    "工具执行超时：超过 " + timeoutSeconds + " 秒未返回，已中断本次调用");
+        } catch (InterruptedException e) {
+            // 恢复中断标记，避免吞掉线程中断信号。
+            Thread.currentThread().interrupt();
+            future.cancel(true);
+            return ToolResult.failed(call.name(), "工具执行被中断");
+        } catch (ExecutionException e) {
+            // 解包真实异常，交给外层统一翻译成用户可读的失败结果。
+            Throwable cause = e.getCause();
+            if (cause instanceof Exception exception) {
+                throw exception;
+            }
+            throw new IllegalStateException(cause);
+        }
+    }
+
+    private ToolResult dispatch(ToolCall call) {
+        // 根据工具名称分发到 Skill + CLI 飞书统一入口。
+        if ("cli.run_skill".equals(call.name())) {
+            return runSkill(call);
+        }
+
+        // 根据工具名称分发到飞书用户身份 scope 映射查询。
+        if ("feishu.scope_for_domain".equals(call.name())) {
+            return scopeForDomain(call);
+        }
+
+        // 根据工具名称分发到电商 MCP 工具列表。
+        if ("ecommerce.list_tools".equals(call.name())) {
+            return listEcommerceTools(call);
+        }
+
+        // 根据工具名称分发到电商 MCP 工具调用。
+        if ("ecommerce.call_tool".equals(call.name())) {
+            return callEcommerceTool(call);
+        }
+
+        // 理论上不会走到这里：execute 已经用白名单挡过一次。
+        return ToolResult.failed(call.name(), "未知工具：" + call.name());
     }
 
     private void logResult(ToolResult result) {
@@ -256,5 +405,24 @@ public class ToolRegistryService {
 
         // 不存在时返回空 Map。
         return Map.of();
+    }
+
+    private ThreadFactory namedDaemonFactory() {
+        // 工具执行线程用守护线程，进程退出时不会被卡住的工具调用拖住。
+        return runnable -> {
+            Thread thread = new Thread(runnable, "tool-exec-" + System.nanoTime());
+            thread.setDaemon(true);
+            return thread;
+        };
+    }
+
+    /**
+     * 关闭工具执行线程池。
+     */
+    @PreDestroy
+    void shutdownToolExecutor() {
+        // 先停止接收新任务，再中断在途任务。
+        toolExecutor.shutdownNow();
+        log.info("[阶段4 工具调用] 工具执行线程池已关闭");
     }
 }

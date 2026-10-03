@@ -10,6 +10,7 @@ import com.sunzeqin.feishuadmin.service.MessageDedupService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -81,7 +82,13 @@ public class FeishuEventController {
                     event.messageId(), event.chatId(), event.chatType(), event.openId(), event.text());
 
             // 后台异步处理消息，当前回调立即返回 200 给飞书，避免飞书超时重试。
-            agentService.handleMessageAsync(event);
+            try {
+                agentService.handleMessageAsync(event);
+            } catch (TaskRejectedException e) {
+                // 业务线程池已满：不阻塞回调线程，改为回一条“稍后再试”，避免用户永远等不到结果。
+                log.warn("[阶段1 接收飞书事件] 业务线程池已满，已拒绝本次任务：消息ID={}", event.messageId());
+                agentService.handleRejected(event);
+            }
         } else {
             // 如果不是当前系统关心的事件，只记录日志，不抛异常，避免飞书反复重试。
             String eventType = root.path("header").path("event_type").asText("");

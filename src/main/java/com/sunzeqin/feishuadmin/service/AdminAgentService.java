@@ -1,6 +1,7 @@
 package com.sunzeqin.feishuadmin.service;
 
 import com.sunzeqin.feishuadmin.config.FeishuProperties;
+import com.sunzeqin.feishuadmin.config.FeishuAsyncConfig;
 import com.sunzeqin.feishuadmin.pojo.agent.AgentRunResult;
 import com.sunzeqin.feishuadmin.pojo.FeishuMessageEvent;
 import com.sunzeqin.feishuadmin.service.agent.AgentOrchestratorService;
@@ -69,10 +70,24 @@ public class AdminAgentService {
         doHandleMessage(event);
     }
 
-    @Async
+    @Async(FeishuAsyncConfig.FEISHU_AGENT_EXECUTOR)
     public void handleMessageAsync(FeishuMessageEvent event) {
         // 后台异步处理飞书消息，避免飞书回调接口等待 LLM 执行。
+        // 指定专用线程池，避免使用无界默认执行器把线程数打满。
         doHandleMessage(event);
+    }
+
+    /**
+     * 业务线程池已满时的兜底回复。
+     *
+     * <p>@Async 被拒绝时异常抛在调用方线程上，所以这里提供一个同步入口给 Controller 调用，
+     * 保证用户不会只看到“已收到”却一直等不到结果。</p>
+     *
+     * @param event 消息事件
+     */
+    public void handleRejected(FeishuMessageEvent event) {
+        // 线程池满时不进入 Agent 循环，只回复一条用户能理解的提示。
+        safeReplyToSender(event, "⏳ 当前任务较多，请稍后再发一次。");
     }
 
     private void doHandleMessage(FeishuMessageEvent event) {

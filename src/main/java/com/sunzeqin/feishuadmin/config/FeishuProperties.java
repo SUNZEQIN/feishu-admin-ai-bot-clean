@@ -98,6 +98,39 @@ public class FeishuProperties {
     // 电商 MCP 服务地址。
     private String ecommerceMcpBaseUrl = "http://127.0.0.1:8090";
 
+    // 单次工具调用最大等待秒数（含 Skill + CLI、电商 MCP），超时后中断本次调用并返回失败。
+    private int toolTimeoutSeconds = 90;
+
+    // 工具执行线程池大小，避免工具卡住时拖死 Agent 循环。
+    private int toolExecutorThreads = 8;
+
+    // 允许触发工具执行的飞书 open_id / user_id 白名单，多个用逗号分隔；为空表示不限制。
+    private String toolAllowedOpenIds = "";
+
+    // 允许触发工具执行的飞书会话 ID 白名单，多个用逗号分隔；为空表示不限制。
+    private String toolAllowedChatIds = "";
+
+    // 飞书 Agent 业务线程池核心线程数。
+    private int agentCorePoolSize = 4;
+
+    // 飞书 Agent 业务线程池最大线程数。
+    private int agentMaxPoolSize = 8;
+
+    // 飞书 Agent 业务线程池队列容量，超限后直接拒绝并回复用户稍后再试。
+    private int agentQueueCapacity = 100;
+
+    // 飞书 OpenAPI 连接超时秒数。
+    private int openApiConnectTimeoutSeconds = 3;
+
+    // 飞书 OpenAPI 读取超时秒数。
+    private int openApiReadTimeoutSeconds = 20;
+
+    // 电商 MCP 连接超时秒数。
+    private int ecommerceMcpConnectTimeoutSeconds = 3;
+
+    // 电商 MCP 读取超时秒数。
+    private int ecommerceMcpReadTimeoutSeconds = 15;
+
     public String getBaseUrl() {
         // 返回飞书 OpenAPI 基础地址。
         return baseUrl;
@@ -386,5 +419,115 @@ public class FeishuProperties {
     public void setEcommerceMcpBaseUrl(String ecommerceMcpBaseUrl) {
         // 设置电商 MCP 服务地址。
         this.ecommerceMcpBaseUrl = ecommerceMcpBaseUrl;
+    }
+
+    public int getToolTimeoutSeconds() {
+        // 返回工具调用超时秒数。
+        return toolTimeoutSeconds;
+    }
+
+    public void setToolTimeoutSeconds(int toolTimeoutSeconds) {
+        // 设置工具调用超时秒数，最小值保护为 1 秒。
+        this.toolTimeoutSeconds = Math.max(1, toolTimeoutSeconds);
+    }
+
+    public int getToolExecutorThreads() {
+        // 返回工具执行线程数。
+        return toolExecutorThreads;
+    }
+
+    public void setToolExecutorThreads(int toolExecutorThreads) {
+        // 设置工具执行线程数，最小值保护为 2。
+        this.toolExecutorThreads = Math.max(2, toolExecutorThreads);
+    }
+
+    public String getToolAllowedOpenIds() {
+        // 返回工具调用调用者白名单。
+        return toolAllowedOpenIds;
+    }
+
+    public void setToolAllowedOpenIds(String toolAllowedOpenIds) {
+        // 设置工具调用调用者白名单。
+        this.toolAllowedOpenIds = toolAllowedOpenIds == null ? "" : toolAllowedOpenIds;
+    }
+
+    public String getToolAllowedChatIds() {
+        // 返回工具调用会话白名单。
+        return toolAllowedChatIds;
+    }
+
+    public void setToolAllowedChatIds(String toolAllowedChatIds) {
+        // 设置工具调用会话白名单。
+        this.toolAllowedChatIds = toolAllowedChatIds == null ? "" : toolAllowedChatIds;
+    }
+
+    public int getAgentCorePoolSize() {
+        // 返回业务线程池核心线程数。
+        return agentCorePoolSize;
+    }
+
+    public void setAgentCorePoolSize(int agentCorePoolSize) {
+        // 设置核心线程数，最小值保护为 1。
+        this.agentCorePoolSize = Math.max(1, agentCorePoolSize);
+    }
+
+    public int getAgentMaxPoolSize() {
+        // 返回业务线程池最大线程数。
+        return agentMaxPoolSize;
+    }
+
+    public void setAgentMaxPoolSize(int agentMaxPoolSize) {
+        // 设置最大线程数，不能小于核心线程数。
+        this.agentMaxPoolSize = Math.max(agentCorePoolSize, agentMaxPoolSize);
+    }
+
+    public int getAgentQueueCapacity() {
+        // 返回业务线程池队列容量。
+        return agentQueueCapacity;
+    }
+
+    public void setAgentQueueCapacity(int agentQueueCapacity) {
+        // 设置队列容量，最小值保护为 1。
+        this.agentQueueCapacity = Math.max(1, agentQueueCapacity);
+    }
+
+    public int getOpenApiConnectTimeoutSeconds() {
+        // 返回飞书 OpenAPI 连接超时秒数。
+        return openApiConnectTimeoutSeconds;
+    }
+
+    public void setOpenApiConnectTimeoutSeconds(int openApiConnectTimeoutSeconds) {
+        // 设置连接超时秒数，最小值保护为 1 秒。
+        this.openApiConnectTimeoutSeconds = Math.max(1, openApiConnectTimeoutSeconds);
+    }
+
+    public int getOpenApiReadTimeoutSeconds() {
+        // 返回飞书 OpenAPI 读取超时秒数。
+        return openApiReadTimeoutSeconds;
+    }
+
+    public void setOpenApiReadTimeoutSeconds(int openApiReadTimeoutSeconds) {
+        // 设置读取超时秒数，最小值保护为 1 秒。
+        this.openApiReadTimeoutSeconds = Math.max(1, openApiReadTimeoutSeconds);
+    }
+
+    public int getEcommerceMcpConnectTimeoutSeconds() {
+        // 返回电商 MCP 连接超时秒数。
+        return ecommerceMcpConnectTimeoutSeconds;
+    }
+
+    public void setEcommerceMcpConnectTimeoutSeconds(int ecommerceMcpConnectTimeoutSeconds) {
+        // 设置连接超时秒数，最小值保护为 1 秒。
+        this.ecommerceMcpConnectTimeoutSeconds = Math.max(1, ecommerceMcpConnectTimeoutSeconds);
+    }
+
+    public int getEcommerceMcpReadTimeoutSeconds() {
+        // 返回电商 MCP 读取超时秒数。
+        return ecommerceMcpReadTimeoutSeconds;
+    }
+
+    public void setEcommerceMcpReadTimeoutSeconds(int ecommerceMcpReadTimeoutSeconds) {
+        // 设置读取超时秒数，最小值保护为 1 秒。
+        this.ecommerceMcpReadTimeoutSeconds = Math.max(1, ecommerceMcpReadTimeoutSeconds);
     }
 }
