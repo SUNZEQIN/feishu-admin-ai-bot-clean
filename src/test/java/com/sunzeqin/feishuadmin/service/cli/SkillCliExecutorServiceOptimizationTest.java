@@ -99,6 +99,16 @@ class SkillCliExecutorServiceOptimizationTest {
         assertEquals(null, method.invoke(service, "删除多维表格里的第三行记录"), "不是文件级任务，不能接管");
         assertEquals(null, method.invoke(service, "帮我建一个多维表格"), "没有「最早/最新」，不能接管");
         assertEquals(null, method.invoke(service, "删除我名下最早的1000个多维表格"), "数量超过上限，不能接管");
+        assertEquals(null, method.invoke(service, "把多维表格里最早的10个记录删掉"),
+                "说的是表格里面的记录，不能当成删整个表格");
+
+        // 规划器会把「最早」写成各种口语说法，归属说法也可能省略；这两种都不能漏。
+        Object spoken = method.invoke(service, "删除我名下最旧的10个多维表格");
+        assertEquals(true, field(spoken, "oldest"), "「最旧」要当「最早」处理");
+
+        Object noOwner = method.invoke(service, "删除创建时间最早的10个多维表格");
+        assertEquals(true, field(noOwner, "deleteIntent"),
+                "没写「我名下」也要接管：取数范围本来就只限于本人，取错了用户会在确认清单里看出来");
     }
 
     @Test

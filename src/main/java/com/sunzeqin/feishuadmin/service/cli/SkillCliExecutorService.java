@@ -797,6 +797,8 @@ public class SkillCliExecutorService {
         // 意图不匹配就直接交回通用流程。
         TopNFileIntent intent = parseTopNFileIntent(goal);
         if (intent == null) {
+            // 记一条 INFO：线上出问题时，能直接看出这条消息为什么没走确定性通道。
+            log.info("[阶段5 SkillCLI规划] 不是确定性 Top-N 文件任务，走通用流程：目标={}", goal);
             return Map.of();
         }
 
@@ -908,15 +910,20 @@ public class SkillCliExecutorService {
             return null;
         }
 
-        // 必须是本人名下的文件盘点。
-        boolean createdByMe = goal.contains("我创建");
-        if (!createdByMe && !goal.contains("我名下") && !goal.contains("我本人") && !goal.contains("我的")) {
+        // 说的是表格「里面的东西」（记录、字段、视图等）时不能接管：
+        // 那是表格内部操作，不是文件级操作，接错了会去删整个多维表格。
+        if (containsAny(goal, "记录", "数据行", "字段", "视图", "表单", "仪表盘", "工作流", "表里", "里面的")) {
             return null;
         }
 
-        // 必须带「最早 / 最新」这类 Top-N 意图。
-        boolean oldest = goal.contains("最早");
-        if (!oldest && !goal.contains("最新")) {
+        // 必须带「最早 / 最新」这类 Top-N 意图。这里放宽几种口语写法：
+        // 线上就出现过规划器把「最早的 N 个」写成别的说法，导致确定性通道没命中的情况。
+        boolean oldest;
+        if (containsAny(goal, "最早", "最旧", "最老", "最久")) {
+            oldest = true;
+        } else if (containsAny(goal, "最新", "最近")) {
+            oldest = false;
+        } else {
             return null;
         }
 
@@ -930,8 +937,21 @@ public class SkillCliExecutorService {
             return null;
         }
 
+        // 归属只用来决定 --mine 还是 --created-by-me，不作为接管条件：
+        // 无论如何这个任务都只在「本人名下」的范围内取数，取错了用户会在确认清单里看出来。
+        boolean createdByMe = containsAny(goal, "我创建", "我新建", "我建的");
+
         boolean deleteIntent = goal.contains("删除") || goal.contains("清掉") || goal.contains("移除");
         return new TopNFileIntent(deleteIntent, oldest, count, createdByMe);
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        for (String keyword : keywords) {
+            if (text.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
