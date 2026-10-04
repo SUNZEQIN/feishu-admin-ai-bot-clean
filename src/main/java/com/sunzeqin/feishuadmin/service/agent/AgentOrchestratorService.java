@@ -3,9 +3,14 @@ package com.sunzeqin.feishuadmin.service.agent;
 import com.sunzeqin.feishuadmin.pojo.FeishuMessageEvent;
 import com.sunzeqin.feishuadmin.pojo.agent.AgentDecision;
 import com.sunzeqin.feishuadmin.pojo.agent.AgentRunResult;
+import com.sunzeqin.feishuadmin.pojo.audit.AgentTaskStatus;
+import com.sunzeqin.feishuadmin.pojo.role.BotRole;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolCall;
+import com.sunzeqin.feishuadmin.pojo.tool.ToolErrorCode;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
 import com.sunzeqin.feishuadmin.service.ConversationMemoryService;
+import com.sunzeqin.feishuadmin.service.audit.TaskAuditService;
+import com.sunzeqin.feishuadmin.service.role.BotRoleResolver;
 import com.sunzeqin.feishuadmin.service.tool.ToolRegistryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +46,18 @@ public class AgentOrchestratorService {
     // 会话记忆服务，用来读取和保存用户上下文。
     private final ConversationMemoryService memoryService;
 
+    // 角色解析服务，用来把发送人翻译成 L1/L2/L3。
+    private final BotRoleResolver botRoleResolver;
+
+    // 任务审计服务，用来落任务行与工具调用明细。
+    private final TaskAuditService taskAuditService;
+
+    // 数据来源标注服务，给用到电商数据的回复追加来源说明。
+    private final DataSourceNoticeService dataSourceNoticeService;
+
     public AgentOrchestratorService(AgentPlannerService planner, ToolRegistryService toolRegistry,
-            ConversationMemoryService memoryService) {
+            ConversationMemoryService memoryService, BotRoleResolver botRoleResolver,
+            TaskAuditService taskAuditService, DataSourceNoticeService dataSourceNoticeService) {
         // 保存 Agent 规划器。
         this.planner = planner;
 
@@ -51,12 +66,41 @@ public class AgentOrchestratorService {
 
         // 保存会话记忆服务。
         this.memoryService = memoryService;
+
+        // 保存角色解析服务。
+        this.botRoleResolver = botRoleResolver;
+
+        // 保存任务审计服务。
+        this.taskAuditService = taskAuditService;
+
+        // 保存数据来源标注服务。
+        this.dataSourceNoticeService = dataSourceNoticeService;
     }
 
     public AgentRunResult run(FeishuMessageEvent event) {
+        // 解析角色：审计与权限用同一个来源，避免两处判断不一致。
+        BotRole role = botRoleResolver.resolve(event.openId());
+
+        // 开始任务审计，任务 ID 用于把日志、任务表、工具明细串起来。
+        String taskId = taskAuditService.startTask(event, role);
+
+        try {
+            // 执行 Agent 循环。
+            return runAgent(event, taskId, role);
+        } catch (RuntimeException e) {
+            // 未分类异常也必须写结果，不能让任务永远停在 RUNNING。
+            log.error("[阶段3 外层Agent规划] 未分类异常：消息ID={}，任务ID={}，错误={}",
+                    event.messageId(), taskId, e.getMessage(), e);
+            taskAuditService.finishTask(taskId, AgentTaskStatus.FAILED, "内部异常",
+                    ToolErrorCode.INTERNAL_ERROR, e.getMessage());
+            throw e;
+        }
+    }
+
+    private AgentRunResult runAgent(FeishuMessageEvent event, String taskId, BotRole role) {
         // 打印 Agent 开始执行日志，方便用 messageId 串起整次请求。
-        log.info("[阶段3 外层Agent规划] 开始执行：消息ID={}，会话ID={}，会话类型={}，最大步骤数={}，用户文本={}",
-                event.messageId(), event.chatId(), event.chatType(), MAX_STEPS, event.text());
+        log.info("[阶段3 外层Agent规划] 开始执行：消息ID={}，任务ID={}，会话ID={}，会话类型={}，最大步骤数={}，用户文本={}",
+                event.messageId(), taskId, event.chatId(), event.chatType(), MAX_STEPS, event.text());
 
         // 读取当前用户在当前会话里的历史记忆。
         String memoryText = memoryService.readMemoryText(event);
@@ -73,11 +117,16 @@ public class AgentOrchestratorService {
             AgentRunResult result = new AgentRunResult(false,
                     "⚠️ LLM 规划器未启用，无法判断要调用哪个飞书 CLI 能力。请先启用大模型配置。");
             memoryService.saveAssistantMessage(event, result.reply());
+            taskAuditService.finishTask(taskId, AgentTaskStatus.FAILED, "规划器未启用",
+                    ToolErrorCode.INTERNAL_ERROR, "LLM 规划器未启用");
             return result;
         }
 
         // 保存每一步工具观察结果。
         List<ToolResult> observations = new ArrayList<>();
+
+        // 是否出现过"等待用户确认"的高风险操作拦截。
+        boolean pendingConfirm = false;
 
         // 最多执行 MAX_STEPS 轮。
         for (int step = 1; step <= MAX_STEPS; step++) {
@@ -100,11 +149,19 @@ public class AgentOrchestratorService {
 
             // 如果 LLM 输出最终回复，就结束循环。
             if (!decision.toolCallDecision()) {
+                // 用到电商数据时统一追加数据来源标注（产品规则 C-08）。
+                String finalReply = dataSourceNoticeService.apply(decision.finalReply(), observations);
+
                 // 打印最终回复日志。
                 log.info("[阶段3 外层Agent规划] 生成最终回复：消息ID={}，步骤={}，回复长度={}",
-                        event.messageId(), step, decision.finalReply() == null ? 0 : decision.finalReply().length());
-                AgentRunResult result = new AgentRunResult(true, decision.finalReply());
+                        event.messageId(), step, finalReply == null ? 0 : finalReply.length());
+                AgentRunResult result = new AgentRunResult(true, finalReply);
                 memoryService.saveAssistantMessage(event, result.reply());
+
+                // 被高风险闸门拦下的任务记成等待确认，其余记成功。
+                taskAuditService.finishTask(taskId,
+                        pendingConfirm ? AgentTaskStatus.WAITING_CONFIRM : AgentTaskStatus.SUCCESS,
+                        pendingConfirm ? "等待用户确认" : "生成最终回复", null, "");
                 return result;
             }
 
@@ -114,6 +171,8 @@ public class AgentOrchestratorService {
                 log.warn("[阶段3 外层Agent规划] 执行失败：消息ID={}，步骤={}，原因=缺少工具调用参数", event.messageId(), step);
                 AgentRunResult result = new AgentRunResult(false, "⚠️ Agent 没有给出可执行工具。");
                 memoryService.saveAssistantMessage(event, result.reply());
+                taskAuditService.finishTask(taskId, AgentTaskStatus.FAILED, "缺少工具调用参数",
+                        ToolErrorCode.INTERNAL_ERROR, "Agent 没有给出可执行工具");
                 return result;
             }
 
@@ -124,8 +183,13 @@ public class AgentOrchestratorService {
             log.info("[阶段4 工具调用] 准备执行工具：消息ID={}，步骤={}，工具={}，入参={}",
                     event.messageId(), step, toolCall.name(), toolCall.params());
 
-            // 执行工具。
+            // 执行工具，并记录真实耗时。
+            long startedAt = System.currentTimeMillis();
             ToolResult result = toolRegistry.execute(toolCall);
+            long costMs = System.currentTimeMillis() - startedAt;
+
+            // 每次工具调用落一行审计明细，被拒绝的调用同样落库（带错误码）。
+            taskAuditService.recordToolCall(taskId, step, toolCall, result, costMs);
 
             // 打印工具执行结果日志。
             log.info("[阶段4 工具调用] 工具返回摘要：消息ID={}，步骤={}，工具={}，是否成功={}，说明={}，数据字段={}",
@@ -136,6 +200,11 @@ public class AgentOrchestratorService {
             // 保存工具观察结果。
             observations.add(result);
 
+            // 高风险操作被拦下时，任务最终状态要记成等待确认。
+            if (Boolean.TRUE.equals(result.data().get("needConfirm"))) {
+                pendingConfirm = true;
+            }
+
             // 如果工具已经返回授权链接，直接回复用户，不再交给大模型二次解释，避免误说“不支持授权”。
             String authorizeReply = authorizeReplyFromToolResult(result);
             if (!authorizeReply.isBlank()) {
@@ -144,6 +213,7 @@ public class AgentOrchestratorService {
                         event.messageId(), step, result.tool());
                 AgentRunResult runResult = new AgentRunResult(true, authorizeReply, authorizeUrl);
                 memoryService.saveAssistantMessage(event, runResult.reply());
+                taskAuditService.finishTask(taskId, AgentTaskStatus.SUCCESS, "等待用户授权", null, "");
                 return runResult;
             }
 
@@ -152,6 +222,15 @@ public class AgentOrchestratorService {
                 // 打印工具失败导致 Agent 结束的日志。
                 log.warn("[阶段4 工具调用] 工具失败导致流程结束：消息ID={}，步骤={}，工具={}，原因={}",
                         event.messageId(), step, result.tool(), result.message());
+
+                // 前面有成功步骤就是部分成功，否则整体失败（产品规则 O-02）。
+                AgentTaskStatus status = hasEarlierSuccess(observations)
+                        ? AgentTaskStatus.PARTIAL
+                        : AgentTaskStatus.FAILED;
+
+                // 落最终状态与错误码，越权拦截会被记成 PERMISSION_DENIED。
+                taskAuditService.finishTask(taskId, status, "工具失败", errorCodeOf(result), result.message());
+
                 AgentRunResult runResult = new AgentRunResult(false, "⚠️ 执行失败\n\n🔎 原因：" + result.message());
                 memoryService.saveAssistantMessage(event, runResult.reply());
                 return runResult;
@@ -163,7 +242,52 @@ public class AgentOrchestratorService {
                 event.messageId(), MAX_STEPS);
         AgentRunResult result = new AgentRunResult(false, "⚠️ 本次任务步骤过多，已停止执行，避免重复操作。");
         memoryService.saveAssistantMessage(event, result.reply());
+        taskAuditService.finishTask(taskId, AgentTaskStatus.FAILED, "超过最大步骤数",
+                ToolErrorCode.INTERNAL_ERROR, "超过最大步骤数");
         return result;
+    }
+
+    /**
+     * 判断失败之前是否已经有成功的工具调用。
+     *
+     * <p>用于区分「部分成功」和「整体失败」：前一步拿到了数据、后一步失败，
+     * 对用户来说就是部分完成，必须如实记录。</p>
+     */
+    private boolean hasEarlierSuccess(List<ToolResult> observations) {
+        // 至少要有两次调用，才存在"之前成功过"的可能。
+        if (observations.size() < 2) {
+            return false;
+        }
+
+        // 除最后一条（本次失败）之外，是否存在成功结果。
+        for (int i = 0; i < observations.size() - 1; i++) {
+            if (observations.get(i).success()) {
+                return true;
+            }
+        }
+
+        // 之前没有成功步骤。
+        return false;
+    }
+
+    /**
+     * 从工具结果里解析审计用的错误码。
+     *
+     * <p>没有错误码时统一按 INTERNAL_ERROR 记，避免审计表出现空白无法分类的失败。</p>
+     */
+    private ToolErrorCode errorCodeOf(ToolResult result) {
+        // 空结果按内部错误处理。
+        if (result == null || result.errorCode() == null || result.errorCode().isBlank()) {
+            return ToolErrorCode.INTERNAL_ERROR;
+        }
+
+        try {
+            // 按枚举名解析。
+            return ToolErrorCode.valueOf(result.errorCode());
+        } catch (IllegalArgumentException e) {
+            // 未知错误码不猜，按内部错误记。
+            return ToolErrorCode.INTERNAL_ERROR;
+        }
     }
 
     private String authorizeReplyFromToolResult(ToolResult result) {

@@ -59,3 +59,5 @@ feishu:
   open-api-read-timeout-seconds: ${FEISHU_OPEN_API_READ_TIMEOUT_SECONDS:20}
   ecommerce-mcp-connect-timeout-seconds: ${FEISHU_ECOMMERCE_MCP_CONNECT_TIMEOUT_SECONDS:3}
   ecommerce-mcp-read-timeout-seconds: ${FEISHU_ECOMMERCE_MCP_READ_TIMEOUT_SECONDS:15}
+  audit-enabled: ${FEISHU_AUDIT_ENABLED:true}
+  ecommerce-data-source-notice-enabled: ${FEISHU_ECOMMERCE_DATA_SOURCE_NOTICE_ENABLED:true}
