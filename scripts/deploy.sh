@@ -3,14 +3,17 @@ set -euo pipefail
 
 APP_NAME="feishu-admin-ai-bot-clean"
 APP_DIR="/opt/${APP_NAME}"
+CONTAINER_NAME="feishu-admin-ai-bot-clean"
+NETWORK_NAME="${NETWORK_NAME:-feishu-net}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 GIT_REPO_URL="${GIT_REPO_URL:-https://github.com/SUNZEQIN/feishu-admin-ai-bot-clean.git}"
 GIT_PROXY_PREFIX="${GIT_PROXY_PREFIX:-}"
+HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-120}"
 
-echo "[1/6] 进入项目目录：${APP_DIR}"
+echo "[1/7] 进入项目目录：${APP_DIR}"
 cd "${APP_DIR}"
 
-echo "[2/6] 检查 .env"
+echo "[2/7] 检查 .env"
 if [ ! -f ".env" ]; then
   echo ".env 不存在，正在从 .env.example 复制..."
   cp .env.example .env
@@ -18,7 +21,7 @@ if [ ! -f ".env" ]; then
   exit 1
 fi
 
-echo "[3/6] 拉取最新代码"
+echo "[3/7] 拉取最新代码"
 if [ -d ".git" ]; then
   if [ -n "${GIT_PROXY_PREFIX}" ]; then
     GIT_PULL_URL="${GIT_PROXY_PREFIX}${GIT_REPO_URL}"
@@ -32,11 +35,45 @@ else
   echo "当前目录不是 Git 仓库，跳过 git pull。"
 fi
 
-echo "[5/6] 构建并启动 Java 服务"
+echo "[4/7] 确认外部 Docker 网络"
+# docker-compose.yml 把 feishu-net 声明为 external，网络不存在时 compose 会直接失败。
+# 这里只在缺失时创建，已存在则复用，不会影响其它服务。
+if ! docker network inspect "${NETWORK_NAME}" >/dev/null 2>&1; then
+  echo "外部网络 ${NETWORK_NAME} 不存在，正在创建..."
+  docker network create "${NETWORK_NAME}"
+else
+  echo "外部网络 ${NETWORK_NAME} 已存在，直接复用。"
+fi
+
+echo "[5/7] 构建并启动 Java 服务"
+# 每次都要重新构建：Skill 文件在 resources 下，改了 Skill 必须重新打包进镜像。
 docker compose up -d --build
 
-echo "[6/6] 查看服务状态"
-docker ps --filter "name=${APP_NAME}"
+echo "[6/7] 等待健康检查通过"
+# 用配置里的端口做健康检查，避免只看容器状态就误判部署成功。
+SERVER_PORT_VALUE="$(grep -E '^SERVER_PORT=' .env | tail -1 | cut -d= -f2)"
+SERVER_PORT_VALUE="${SERVER_PORT_VALUE:-8082}"
+HEALTH_URL="http://127.0.0.1:${SERVER_PORT_VALUE}/api/health"
 
-echo "部署完成。查看日志："
-echo "docker logs -f ${APP_NAME}"
+deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
+healthy="no"
+while [ "$(date +%s)" -lt "${deadline}" ]; do
+  if curl -fsS "${HEALTH_URL}" >/dev/null 2>&1; then
+    healthy="yes"
+    break
+  fi
+  sleep 3
+done
+
+echo "[7/7] 查看服务状态"
+docker ps --filter "name=${CONTAINER_NAME}"
+
+if [ "${healthy}" != "yes" ]; then
+  echo "❌ 健康检查未通过：${HEALTH_URL}"
+  echo "最近日志："
+  docker logs --tail=80 "${CONTAINER_NAME}" || true
+  exit 1
+fi
+
+echo "✅ 部署完成，健康检查通过：${HEALTH_URL}"
+echo "查看实时日志：docker logs -f ${CONTAINER_NAME}"
