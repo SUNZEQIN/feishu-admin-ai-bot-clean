@@ -48,7 +48,7 @@ feishu:
   cli-allowed-domains: ${FEISHU_CLI_ALLOWED_DOMAINS:im,base,docs,calendar,vc,minutes,note,contact,approval,attendance,drive,wiki,markdown,mindnotes,whiteboard}
   ecommerce-mcp-enabled: ${FEISHU_ECOMMERCE_MCP_ENABLED:false}
   ecommerce-mcp-base-url: ${FEISHU_ECOMMERCE_MCP_BASE_URL:http://127.0.0.1:8090}
-  tool-timeout-seconds: ${FEISHU_TOOL_TIMEOUT_SECONDS:90}
+  tool-timeout-seconds: ${FEISHU_TOOL_TIMEOUT_SECONDS:240}
   tool-executor-threads: ${FEISHU_TOOL_EXECUTOR_THREADS:8}
   tool-allowed-open-ids: ${FEISHU_TOOL_ALLOWED_OPEN_IDS:}
   tool-allowed-chat-ids: ${FEISHU_TOOL_ALLOWED_CHAT_IDS:}

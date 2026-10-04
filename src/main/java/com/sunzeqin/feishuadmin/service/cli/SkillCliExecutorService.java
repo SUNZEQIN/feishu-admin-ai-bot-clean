@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -50,6 +51,10 @@ public class SkillCliExecutorService {
 
     // 同一条已成功查询被连续重复多少次后，判定模型卡住并停止执行。
     private static final int MAX_REPEATED_QUERY_SKIPS = 3;
+
+    // 同一条查询最多允许真实执行几次。允许 >1 是给「漏取字段后换个投影重跑」留一次机会；
+    // 超过就判为重复，避免回到「换 --jq 反复问同一份数据」的死循环。
+    private static final int MAX_QUERY_EXECUTIONS_PER_SIGNATURE = 2;
 
     // observations 里最新一条允许保留的 stdout 字符数：给足数据，避免模型看不见完整结果而反复重查。
     private static final int LATEST_STDOUT_LIMIT = 8000;
@@ -146,8 +151,8 @@ public class SkillCliExecutorService {
         // 保存所有 CLI 执行观察结果。
         List<CliCommandResult> observations = new ArrayList<>();
 
-        // 已经成功返回过的「查询签名」，用于识别只改了 --jq / --format 的重复查询。
-        Set<String> succeededQuerySignatures = new LinkedHashSet<>();
+        // 每条查询签名已经真实执行过几次，用于识别只改了 --jq / --format 的重复查询。
+        Map<String, Integer> queryExecutionCounts = new LinkedHashMap<>();
 
         // 连续重复查询计数：模型卡住时尽快停下，不要耗到工具总超时。
         int repeatedQueryCount = 0;
@@ -160,7 +165,8 @@ public class SkillCliExecutorService {
 
         // help 也是一条查询：同一条 help 重复查同样按重复处理。
         if (helpResult.exitCode() == 0) {
-            succeededQuerySignatures.add(commandSignature(List.of(properties.getCliCommand(), normalizedDomain, "--help")));
+            countQueryExecution(queryExecutionCounts,
+                    commandSignature(List.of(properties.getCliCommand(), normalizedDomain, "--help")));
         }
 
         // help 都失败时直接停止，避免后面模型在没有 CLI 能力说明的情况下继续猜命令。
@@ -250,8 +256,8 @@ public class SkillCliExecutorService {
             // 同一条查询的语义签名：只改 --jq / --format 的重复查询算同一条。
             String signature = commandSignature(command);
 
-            // 已经成功返回过的同一条查询再跑一次不可能拿到新数据，跳过真实调用并把提示回灌给模型。
-            if (succeededQuerySignatures.contains(signature)) {
+            // 同一条查询执行到上限后不再真实调用，只把提示回灌给模型。
+            if (isDuplicateQuery(queryExecutionCounts, signature)) {
                 repeatedQueryCount++;
                 String message = "同一条查询已经成功返回过，只修改 --jq / --format 重新查询不会得到新数据，已跳过执行。"
                         + "请直接基于已有 observations 继续下一步：需要写操作就直接执行，已经全部完成就输出 final_answer。"
@@ -289,9 +295,9 @@ public class SkillCliExecutorService {
             if (commandResult.exitCode() == 0) {
                 // 写操作改变远端状态，旧查询结果可能已经过期，先清掉旧的查询记忆再记这一条。
                 if (isWriteCommand(command)) {
-                    succeededQuerySignatures.clear();
+                    queryExecutionCounts.clear();
                 }
-                succeededQuerySignatures.add(signature);
+                countQueryExecution(queryExecutionCounts, signature);
                 repeatedQueryCount = 0;
             }
 
@@ -391,6 +397,24 @@ public class SkillCliExecutorService {
         }
 
         return false;
+    }
+
+    /**
+     * 记录一条查询签名被执行过一次。
+     */
+    private void countQueryExecution(Map<String, Integer> queryExecutionCounts, String signature) {
+        queryExecutionCounts.merge(signature, 1, Integer::sum);
+    }
+
+    /**
+     * 判断这条查询是否已经执行到上限。
+     *
+     * <p>允许执行不止一次，是因为模型确实可能漏取字段（例如分页要用的 page_token），
+     * 需要一次「换个投影重跑」的机会。超过上限还在反复重跑，就是在拿同一份数据反复问，
+     * 必须按重复处理。</p>
+     */
+    private boolean isDuplicateQuery(Map<String, Integer> queryExecutionCounts, String signature) {
+        return queryExecutionCounts.getOrDefault(signature, 0) >= MAX_QUERY_EXECUTIONS_PER_SIGNATURE;
     }
 
     /**
@@ -719,6 +743,12 @@ public class SkillCliExecutorService {
         // 从用户目标里抽取“最早/最新/前 N 个”。
         Integer requested = requestedTopN(goal);
         if (requested == null || requested <= 0) {
+            return;
+        }
+
+        // 「最早」要的东西在降序结果的最后一页：把 page-size 收敛到 N 只会让页数变多，
+        // 而且「翻更多页」的命令会和上一条算出同一个签名、被重复闸门误拦。这种情况不干预。
+        if (goal != null && goal.contains("最早")) {
             return;
         }
 

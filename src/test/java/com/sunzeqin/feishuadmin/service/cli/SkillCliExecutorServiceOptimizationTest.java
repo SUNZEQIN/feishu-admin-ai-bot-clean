@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -24,22 +26,55 @@ import static org.mockito.Mockito.mock;
 class SkillCliExecutorServiceOptimizationTest {
 
     @Test
-    void topNCreateTimeSearchUsesOnlyRequestedPageSize() throws Exception {
+    void oldestIntentKeepsPageSizeSoTheModelCanPageToTheEnd() throws Exception {
+        // 「最早」要的东西在降序结果的最后一页。把 page-size 压到 N 只会让页数变多，
+        // 而且「翻更多页」会和上一条算出同一个签名、被重复闸门误拦。
+        List<String> normalized = normalize(List.of("lark-cli", "drive", "+search", "--doc-types", "bitable",
+                "--mine", "--sort", "create_time", "--page-size", "20", "--as", "user", "--format", "json"),
+                "删除我名下创建时间最早的10个多维表格");
+
+        assertEquals("20", normalized.get(normalized.indexOf("--page-size") + 1),
+                "「最早」不能把 page-size 收敛到 N，否则模型拿不到全量、翻页还会被误判成重复查询");
+    }
+
+    @Test
+    void newestIntentConvergesPageSizeToRequestedN() throws Exception {
+        // 「最新」要的东西就在降序结果的第一页，收敛才是安全的。
+        List<String> normalized = normalize(List.of("lark-cli", "drive", "+search", "--doc-types", "bitable",
+                "--mine", "--sort", "create_time", "--page-size", "20", "--as", "user", "--format", "json"),
+                "打开我名下创建时间最新的10个多维表格");
+
+        assertEquals("10", normalized.get(normalized.indexOf("--page-size") + 1),
+                "「最新」要的东西就在第一页，收敛 page-size 才能省数据量和上下文");
+    }
+
+    @Test
+    void sameQueryMayRunTwiceButNotForever() throws Exception {
+        SkillCliExecutorService service = service();
+        Method method = SkillCliExecutorService.class.getDeclaredMethod(
+                "isDuplicateQuery", Map.class, String.class);
+        method.setAccessible(true);
+
+        Map<String, Integer> counts = new HashMap<>();
+
+        assertFalse((Boolean) method.invoke(service, counts, "sig"), "没执行过的查询不是重复");
+
+        counts.put("sig", 1);
+        assertFalse((Boolean) method.invoke(service, counts, "sig"),
+                "允许重跑一次：模型常常漏取字段（例如分页要用的 page_token），需要一次改投影的机会");
+
+        counts.put("sig", 2);
+        assertTrue((Boolean) method.invoke(service, counts, "sig"),
+                "同一条查询执行到上限后必须判为重复，否则又会回到空转的死循环");
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> normalize(List<String> command, String goal) throws Exception {
         SkillCliExecutorService service = service();
         Method method = SkillCliExecutorService.class.getDeclaredMethod(
                 "normalizeCommand", List.class, String.class, String.class, String.class);
         method.setAccessible(true);
-
-        @SuppressWarnings("unchecked")
-        List<String> normalized = (List<String>) method.invoke(service,
-                List.of("lark-cli", "drive", "+search", "--doc-types", "bitable", "--mine",
-                        "--sort", "create_time", "--page-size", "20", "--as", "user", "--format", "json"),
-                "删除我名下创建时间最早的10个多维表格",
-                "base",
-                "ou_test");
-
-        assertEquals("10", normalized.get(normalized.indexOf("--page-size") + 1),
-                "只需要最早10个时，搜索不应先拉20个再翻页");
+        return (List<String>) method.invoke(service, command, goal, "base", "ou_test");
     }
 
     @Test

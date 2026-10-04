@@ -24,9 +24,9 @@
 
 | 需求 | 正确写法 | 说明 |
 | --- | --- | --- |
-| 分页 | `--page-token <token>` | **本命令没有 `--page-all`**，写了直接退出码 2；page token 从上一页响应里取 |
+| 分页 | `--page-token <token>` | **本命令没有 `--page-all`**，写了直接退出码 2；token 从上一页响应的 `.data.page_token` 取，所以**用 `--jq` 裁剪字段时必须把 `page_token` 留在输出里**，否则只能重跑一次同一条查询 |
 | 每页条数 | `--page-size 1..20` | 上限 20，默认 15；填 50 无效 |
-| 按创建时间排序 | `--sort create_time` | 可用值：`default` / `edit_time` / `edit_time_asc` / `open_time` / `create_time`；**没有 `create_time_asc`** |
+| 按创建时间排序 | `--sort create_time` | 可用值：`default` / `edit_time` / `edit_time_asc` / `open_time` / `create_time`；**没有 `create_time_asc`**，`create_time` 是**降序（最新在前）** |
 | 我拥有的 | `--mine` | 服务端 owner 语义 |
 | 我创建的 | `--created-by-me` | 原始创建者语义，与 `--mine` 不同，不要混用 |
 | 按类型筛 | `--doc-types bitable` | 可用：`doc,sheet,bitable,mindnote,file,wiki,docx,folder,catalog,slides,shortcut`，逗号分隔 |
@@ -55,6 +55,15 @@ lark-cli drive +search --doc-types bitable --mine --as user --page-size 20 --sor
 lark-cli drive +search --doc-types bitable --mine --as user --page-size 20 --format json --jq '.data.results | map({title: .result_meta.title, token: .result_meta.token, create_time: .result_meta.create_time})'
 ```
 
+要「创建时间**最早**的 N 个」必须翻到最后一页：`--sort create_time` 是降序，最早的在末尾。翻页时一定要把 `page_token` 取回来：
+
+```bash
+# 第一页
+lark-cli drive +search --doc-types bitable --mine --as user --page-size 20 --sort create_time --format json --jq '{page_token: .data.page_token, has_more: .data.has_more, items: [.data.results[] | {title: .result_meta.title, token: .result_meta.token, create_time: .result_meta.create_time}]}'
+# has_more 为 true 时取下一页，--page-token 用上一页返回的值
+lark-cli drive +search --doc-types bitable --mine --as user --page-size 20 --sort create_time --format json --page-token '<上一页的 page_token>' --jq '{page_token: .data.page_token, has_more: .data.has_more, items: [.data.results[] | {token: .result_meta.token, create_time: .result_meta.create_time}]}'
+```
+
 删除一个多维表格（高风险，必须等用户明确确认后再执行）：
 
 ```bash
@@ -66,6 +75,8 @@ lark-cli drive +delete --file-token <token> --type bitable --yes --as user --for
 - 不要对 `drive +search` 加 `--page-all`（本域不支持；`im` 域的部分命令才支持）。
 - 不要把 `--page-size` 写到 20 以上。
 - 不要用 jq 排序代替 `--sort`。
+- 不要以为 `--sort create_time` 是「最早在前」：它是降序，「最早的 N 个」要翻到最后一页。
+- 不要为了看全结果反复重跑同一条**不带 `--page-token`** 的查询：那永远是同一页，不会有新数据。
 - 不要把 `--mine` 和 `--created-by-me` 当成同一个意思。
 - 不要在用户没明确确认时执行 `+delete`。
 

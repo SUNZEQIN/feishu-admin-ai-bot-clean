@@ -102,7 +102,7 @@ public class FeishuProperties {
     private String ecommerceMcpBaseUrl = "http://127.0.0.1:8090";
 
     // 单次工具调用最大等待秒数（含 Skill + CLI、电商 MCP），超时后中断本次调用并返回失败。
-    private int toolTimeoutSeconds = 90;
+    private int toolTimeoutSeconds = 240;
 
     // 工具执行线程池大小，避免工具卡住时拖死 Agent 循环。
     private int toolExecutorThreads = 8;
