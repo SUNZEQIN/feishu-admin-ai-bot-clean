@@ -24,8 +24,12 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -61,6 +65,12 @@ public class SkillCliExecutorService {
 
     // 更早的 observations 保留的 stdout 字符数：只留摘要，防止提示词无限膨胀。
     private static final int OLDER_STDOUT_LIMIT = 800;
+
+    // 确定性 Top-N 文件任务允许的最大数量，超过走通用流程，避免一次删掉过多文件。
+    private static final int MAX_TOP_N_FILES = 100;
+
+    // 盘点「我名下所有文件」时最多翻多少页，防止分页异常时无限翻下去。
+    private static final int MAX_SEARCH_PAGES = 20;
 
     /**
      * 写操作子命令里的动作词。
@@ -143,6 +153,14 @@ public class SkillCliExecutorService {
                 sourceChatId, originalMessageId, senderOpenId, senderUserId);
         if (!authorizeResult.isEmpty()) {
             return authorizeResult;
+        }
+
+        // 确定性 Top-N 文件任务：列出 / 删除「我名下 (最早|最新) 的 N 个多维表格」。
+        // 本质是「取全量 → 排序 → 挑 N 个」的数据搬运，交给 Java 做，不占用模型往返。
+        Map<String, Object> topNResult = runDeterministicTopNFileTask(normalizedDomain, goal,
+                sourceChatId, originalMessageId, senderOpenId, senderUserId);
+        if (!topNResult.isEmpty()) {
+            return topNResult;
         }
 
         // 读取所有允许业务域的 Skill 文档，让复合任务可以跨域执行。
@@ -550,6 +568,18 @@ public class SkillCliExecutorService {
             return Map.of();
         }
 
+        return userAuthorizeResultUnchecked(normalizedDomain, goal, sourceChatId,
+                originalMessageId, senderOpenId, senderUserId);
+    }
+
+    /**
+     * 不做身份意图判断，直接检查用户 token；缺 token 或 scope 不足就返回授权链接。
+     *
+     * <p>给「本来就确定要用本人身份」的路径用，例如「我名下」的 Top-N 文件盘点，
+     * 避免因为用户话术里没有「用我的身份」这种固定说法而漏掉授权检查。</p>
+     */
+    private Map<String, Object> userAuthorizeResultUnchecked(String normalizedDomain, String goal, String sourceChatId,
+            String originalMessageId, String senderOpenId, String senderUserId) {
         // 根据当前业务域 + 用户目标计算用户身份需要的 scope。
         // 不能只看单个 domain：例如“云文档”实际横跨 drive/docs；“导入/新建多维表格”常横跨 base/drive。
         // 这里预先合并，避免用户刚扫完 drive，又因为 docs/base 缺权限被要求再扫一次。
@@ -721,6 +751,304 @@ public class SkillCliExecutorService {
                 """.formatted(today, today, tomorrow, dayAfterTomorrow,
                 domain, properties.getCliAllowedDomains(), sourceChatId,
                 originalMessageId, senderOpenId, senderUserId, goal, skillText, observationText);
+    }
+
+    /**
+     * 确定性 Top-N 文件任务的意图。
+     *
+     * @param deleteIntent  是否要删除；false 表示只盘点
+     * @param oldest        true = 最早的 N 个；false = 最新的 N 个
+     * @param count         要取几个
+     * @param createdByMe   true = 我创建的；false = 我拥有的
+     */
+    private record TopNFileIntent(boolean deleteIntent, boolean oldest, int count, boolean createdByMe) {
+    }
+
+    /**
+     * 一个云盘文件的最小信息，够排序、够删除。
+     */
+    private record DriveFile(String title, String token, long createTime, String createTimeText) {
+    }
+
+    /**
+     * 确定性执行「列出 / 删除 我名下 (最早|最新) 的 N 个多维表格」。
+     *
+     * <p>为什么放到 Java：这个任务要的是「取全量 → 排序 → 挑 N 个」，属于数据搬运而不是判断。
+     * 交给模型做时，它得靠一轮又一轮 CLI 往返去翻页、挑数据，实测会耗掉 90~240 秒还不一定做对，
+     * 而且容易陷进「改 --jq 反复问同一份数据」。Java 一次拿全、自己排序挑选，
+     * 再按破坏性操作闸门决定「先问用户」还是「直接执行」，全程不需要模型往返。</p>
+     */
+    private Map<String, Object> runDeterministicTopNFileTask(String normalizedDomain, String goal,
+            String sourceChatId, String originalMessageId, String senderOpenId, String senderUserId) {
+        // 意图不匹配就直接交回通用流程。
+        TopNFileIntent intent = parseTopNFileIntent(goal);
+        if (intent == null) {
+            return Map.of();
+        }
+
+        // 这个任务必须用本人身份（「我名下」），先确保有可用的用户 token；没有就把授权链接发给用户。
+        Map<String, Object> authorizeResult = userAuthorizeResultUnchecked(normalizedDomain, goal,
+                sourceChatId, originalMessageId, senderOpenId, senderUserId);
+        if (!authorizeResult.isEmpty()) {
+            return authorizeResult;
+        }
+
+        // 一次拿全，翻页由 Java 负责。
+        List<CliCommandResult> observations = new ArrayList<>();
+        List<DriveFile> files = fetchAllDriveFiles(intent.createdByMe(), senderOpenId, observations);
+        if (files == null) {
+            // 盘点本身失败：交回通用流程，让原来的失败提示链路去暴露真实原因。
+            log.warn("[阶段5 SkillCLI规划] Top-N 盘点失败，交回通用流程：目标={}", goal);
+            return Map.of();
+        }
+
+        if (files.isEmpty()) {
+            return taskResult(normalizedDomain, goal, sourceChatId, observations,
+                    "没有在你名下找到多维表格。", false);
+        }
+
+        List<DriveFile> targets = selectTopNFiles(files, intent);
+
+        // 创建时间没解析出来时排序不可信，绝不能凭不可信的排序去删除。
+        boolean unreliableOrder = targets.stream().anyMatch(file -> file.createTime() <= 0);
+
+        // 只想看清单：直接把最早的 N 个报出来。
+        if (!intent.deleteIntent()) {
+            return taskResult(normalizedDomain, goal, sourceChatId, observations,
+                    "你名下共 " + files.size() + " 个多维表格，创建时间" + (intent.oldest() ? "最早" : "最新")
+                            + "的 " + targets.size() + " 个是：\n\n" + formatFileList(targets), false);
+        }
+
+        if (unreliableOrder) {
+            return taskResult(normalizedDomain, goal, sourceChatId, observations,
+                    "⚠️ 有文件的创建时间没读出来，排序不可信，我没有执行任何删除。\n\n"
+                            + "本次按顺序取到的是：\n\n" + formatFileList(targets), false);
+        }
+
+        // 破坏性操作走同一道闸门：用户这次的话里没有明确确认，就只问不做。
+        List<String> deleteCommand = deleteCommand(targets.get(0));
+        DestructiveCommandGuard.Decision guardDecision = destructiveCommandGuard.check(deleteCommand, goal);
+        if (guardDecision.blocked()) {
+            log.info("[阶段5 SkillCLI规划] Top-N 删除等待用户确认：目标={}，数量={}", goal, targets.size());
+            return taskResult(normalizedDomain, goal, sourceChatId, observations,
+                    "⚠️ 这是高风险操作，需要你确认后才会执行。\n\n"
+                            + "将从你名下删除这 " + targets.size() + " 个**创建时间最早**的多维表格：\n\n"
+                            + formatFileList(targets)
+                            + "\n确认无误请回复「确认删除」，我会继续。\n"
+                            + "不回复或回复其它内容，我不会做任何改动。", true);
+        }
+
+        // 用户已经明确确认，逐个执行并汇报真实结果。
+        log.info("[阶段5 SkillCLI规划] Top-N 删除开始：目标={}，数量={}", goal, targets.size());
+        List<String> report = new ArrayList<>();
+        int deleted = 0;
+        for (DriveFile target : targets) {
+            CliCommandResult result = executeCommand(deleteCommand(target), senderOpenId);
+            observations.add(result);
+            if (result.exitCode() == 0) {
+                deleted++;
+                report.add("✅ " + target.title());
+                continue;
+            }
+
+            // 第一条失败就停：避免在原因未知的情况下继续批量删。
+            report.add("❌ " + target.title() + "：" + summarizeCommandFailure(result));
+            log.warn("[阶段5 SkillCLI规划] Top-N 删除中断：已删={}，失败文件={}，原因={}",
+                    deleted, target.title(), summarizeCommandFailure(result));
+            break;
+        }
+
+        return taskResult(normalizedDomain, goal, sourceChatId, observations,
+                "已删除 " + deleted + "/" + targets.size() + " 个多维表格：\n\n" + String.join("\n", report), false);
+    }
+
+    /**
+     * 把用户目标解析成 Top-N 文件意图；不匹配时返回 null，交回通用流程。
+     */
+    private TopNFileIntent parseTopNFileIntent(String goal) {
+        if (goal == null || goal.isBlank()) {
+            return null;
+        }
+
+        // 只接管多维表格，其它文件类型先留给通用流程。
+        if (!goal.contains("多维表格")) {
+            return null;
+        }
+
+        // 必须是本人名下的文件盘点。
+        boolean createdByMe = goal.contains("我创建");
+        if (!createdByMe && !goal.contains("我名下") && !goal.contains("我本人") && !goal.contains("我的")) {
+            return null;
+        }
+
+        // 必须带「最早 / 最新」这类 Top-N 意图。
+        boolean oldest = goal.contains("最早");
+        if (!oldest && !goal.contains("最新")) {
+            return null;
+        }
+
+        // 必须带数量。
+        Matcher matcher = Pattern.compile("(\\d+)\\s*个").matcher(goal);
+        if (!matcher.find()) {
+            return null;
+        }
+        int count = Integer.parseInt(matcher.group(1));
+        if (count <= 0 || count > MAX_TOP_N_FILES) {
+            return null;
+        }
+
+        boolean deleteIntent = goal.contains("删除") || goal.contains("清掉") || goal.contains("移除");
+        return new TopNFileIntent(deleteIntent, oldest, count, createdByMe);
+    }
+
+    /**
+     * 翻页取回「我名下所有多维表格」。
+     *
+     * @return 文件列表；命令失败时返回 null（区别于「成功但没有文件」）
+     */
+    private List<DriveFile> fetchAllDriveFiles(boolean createdByMe, String senderOpenId,
+            List<CliCommandResult> observations) {
+        List<DriveFile> files = new ArrayList<>();
+        String pageToken = "";
+
+        for (int page = 1; page <= MAX_SEARCH_PAGES; page++) {
+            List<String> command = new ArrayList<>(List.of(properties.getCliCommand(), "drive", "+search",
+                    "--doc-types", "bitable",
+                    createdByMe ? "--created-by-me" : "--mine",
+                    "--as", "user",
+                    "--page-size", "20",
+                    "--sort", "create_time",
+                    "--format", "json"));
+            if (!pageToken.isBlank()) {
+                command.add("--page-token");
+                command.add(pageToken);
+            }
+
+            CliCommandResult result = executeCommand(command, senderOpenId);
+            observations.add(result);
+            if (result.exitCode() != 0) {
+                return null;
+            }
+
+            JsonNode data = jsonUtils.readTree(result.stdout()).path("data");
+            for (JsonNode node : data.path("results")) {
+                JsonNode meta = node.path("result_meta");
+                String token = meta.path("token").asText("");
+                if (token.isBlank()) {
+                    token = meta.path("obj_token").asText("");
+                }
+                if (token.isBlank()) {
+                    continue;
+                }
+
+                String createTimeRaw = meta.path("create_time").asText("");
+                String createTimeIso = meta.path("create_time_iso").asText("");
+                files.add(new DriveFile(
+                        meta.path("title").asText("(无标题)"),
+                        token,
+                        parseCreateTime(createTimeRaw, createTimeIso),
+                        createTimeIso.isBlank() ? createTimeRaw : createTimeIso));
+            }
+
+            pageToken = data.path("page_token").asText("");
+            if (!data.path("has_more").asBoolean(false) || pageToken.isBlank()) {
+                break;
+            }
+        }
+
+        log.info("[阶段5 SkillCLI规划] Top-N 盘点完成：文件数量={}，翻页数={}", files.size(), observations.size());
+        return files;
+    }
+
+    /**
+     * 把不同形态的创建时间统一成毫秒时间戳，取不出来时返回 0。
+     *
+     * <p>返回 0 表示这个时间不可信：调用方据此拒绝按该排序做删除。</p>
+     */
+    private long parseCreateTime(String raw, String iso) {
+        for (String value : List.of(iso, raw)) {
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+
+            String text = value.trim();
+
+            // unix 时间戳：10 位按秒，13 位按毫秒。
+            if (text.matches("\\d{10,13}")) {
+                long numeric = Long.parseLong(text);
+                return text.length() <= 10 ? numeric * 1000L : numeric;
+            }
+
+            // CLI 有时给 "2023-01-02 03:04:05"，空格换成 T 才能进 ISO 解析器。
+            String normalized = text.replace(' ', 'T');
+
+            // ISO 字符串，带时区和不带时区都试一遍。
+            try {
+                return OffsetDateTime.parse(normalized).toInstant().toEpochMilli();
+            } catch (Exception ignored) {
+                // 继续尝试不带时区的格式。
+            }
+            try {
+                return LocalDateTime.parse(normalized).atZone(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli();
+            } catch (Exception ignored) {
+                // 继续尝试只到日期的格式。
+            }
+            try {
+                return LocalDate.parse(normalized).atStartOfDay(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli();
+            } catch (Exception ignored) {
+                // 都不认就返回 0，让调用方保守处理。
+            }
+        }
+
+        return 0L;
+    }
+
+    /**
+     * 自己排序并取前 N 个，不依赖 CLI 的排序方向（实测 --sort create_time 是降序）。
+     */
+    private List<DriveFile> selectTopNFiles(List<DriveFile> files, TopNFileIntent intent) {
+        List<DriveFile> sorted = new ArrayList<>(files);
+        sorted.sort(Comparator.comparingLong(DriveFile::createTime));
+        if (!intent.oldest()) {
+            Collections.reverse(sorted);
+        }
+        return new ArrayList<>(sorted.subList(0, Math.min(intent.count(), sorted.size())));
+    }
+
+    private List<String> deleteCommand(DriveFile file) {
+        return new ArrayList<>(List.of(properties.getCliCommand(), "drive", "+delete",
+                "--file-token", file.token(),
+                "--type", "bitable",
+                "--yes",
+                "--as", "user",
+                "--format", "json"));
+    }
+
+    private String formatFileList(List<DriveFile> files) {
+        StringBuilder builder = new StringBuilder();
+        int index = 1;
+        for (DriveFile file : files) {
+            builder.append(index++).append(". ").append(file.title());
+            if (!file.createTimeText().isBlank()) {
+                builder.append("（创建于 ").append(file.createTimeText()).append("）");
+            }
+            builder.append('\n');
+        }
+        return builder.toString();
+    }
+
+    private Map<String, Object> taskResult(String domain, String goal, String sourceChatId,
+            List<CliCommandResult> observations, String reply, boolean needConfirm) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("domain", domain);
+        result.put("goal", goal);
+        result.put("sourceChatId", sourceChatId);
+        result.put("finalReply", reply);
+        result.put("observations", observations);
+        if (needConfirm) {
+            result.put("needConfirm", true);
+        }
+        return result;
     }
 
     /**

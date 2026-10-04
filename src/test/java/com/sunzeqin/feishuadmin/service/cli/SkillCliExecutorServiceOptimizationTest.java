@@ -10,6 +10,7 @@ import com.sunzeqin.feishuadmin.utils.JsonUtils;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -75,6 +76,103 @@ class SkillCliExecutorServiceOptimizationTest {
                 "normalizeCommand", List.class, String.class, String.class, String.class);
         method.setAccessible(true);
         return (List<String>) method.invoke(service, command, goal, "base", "ou_test");
+    }
+
+    @Test
+    void topNIntentOnlyMatchesMineWithOldestOrNewest() throws Exception {
+        SkillCliExecutorService service = service();
+        Method method = SkillCliExecutorService.class.getDeclaredMethod("parseTopNFileIntent", String.class);
+        method.setAccessible(true);
+
+        Object deleteOldest = method.invoke(service, "删除我名下创建时间最早的10个多维表格");
+        assertEquals(true, field(deleteOldest, "deleteIntent"), "「删除」要识别成删除意图");
+        assertEquals(true, field(deleteOldest, "oldest"), "「最早」要识别成取最早");
+        assertEquals(10, field(deleteOldest, "count"), "数量要解析出来");
+        assertEquals(false, field(deleteOldest, "createdByMe"), "「我名下」是拥有语义，不是创建语义");
+
+        Object listNewest = method.invoke(service, "列出我创建的最新3个多维表格");
+        assertEquals(false, field(listNewest, "deleteIntent"), "只列出时不是删除意图");
+        assertEquals(false, field(listNewest, "oldest"), "「最新」要识别成取最新");
+        assertEquals(3, field(listNewest, "count"), "数量要解析出来");
+        assertEquals(true, field(listNewest, "createdByMe"), "「我创建」是创建语义");
+
+        assertEquals(null, method.invoke(service, "删除多维表格里的第三行记录"), "不是文件级任务，不能接管");
+        assertEquals(null, method.invoke(service, "帮我建一个多维表格"), "没有「最早/最新」，不能接管");
+        assertEquals(null, method.invoke(service, "删除我名下最早的1000个多维表格"), "数量超过上限，不能接管");
+    }
+
+    @Test
+    void topNSelectionSortsInJavaInsteadOfTrustingCliOrder() throws Exception {
+        Class<?> fileType = Class.forName(
+                "com.sunzeqin.feishuadmin.service.cli.SkillCliExecutorService$DriveFile");
+        Class<?> intentType = Class.forName(
+                "com.sunzeqin.feishuadmin.service.cli.SkillCliExecutorService$TopNFileIntent");
+
+        SkillCliExecutorService service = service();
+        Method method = SkillCliExecutorService.class.getDeclaredMethod("selectTopNFiles", List.class, intentType);
+        method.setAccessible(true);
+
+        // 故意打乱顺序：CLI 的 --sort create_time 是降序，Java 不能依赖它。
+        List<Object> files = List.of(
+                driveFile(fileType, "新", "tok-new", 3000L),
+                driveFile(fileType, "老", "tok-old", 1000L),
+                driveFile(fileType, "中", "tok-mid", 2000L));
+
+        @SuppressWarnings("unchecked")
+        List<Object> oldest = (List<Object>) method.invoke(service, files,
+                intent(intentType, true, true, 2, false));
+        assertEquals(List.of("老", "中"), titles(oldest), "「最早2个」必须自己排序后取最早的两个");
+
+        @SuppressWarnings("unchecked")
+        List<Object> newest = (List<Object>) method.invoke(service, files,
+                intent(intentType, true, false, 2, false));
+        assertEquals(List.of("新", "中"), titles(newest), "「最新2个」必须取最新的两个");
+    }
+
+    @Test
+    void createTimeParsingRejectsGarbageSoDeletionStaysSafe() throws Exception {
+        SkillCliExecutorService service = service();
+        Method method = SkillCliExecutorService.class.getDeclaredMethod(
+                "parseCreateTime", String.class, String.class);
+        method.setAccessible(true);
+
+        assertTrue((Long) method.invoke(service, "", "2023-01-02T03:04:05+08:00") > 0L,
+                "ISO 字符串要能解析");
+        assertEquals(1672600000000L, (Long) method.invoke(service, "1672600000", ""),
+                "10 位 unix 时间戳按秒解析");
+        assertEquals(1672600000000L, (Long) method.invoke(service, "1672600000000", ""),
+                "13 位 unix 时间戳按毫秒解析");
+        assertTrue((Long) method.invoke(service, "2023-01-02 03:04:05", "") > 0L,
+                "带空格的日期时间也要能解析，CLI 有时给这种格式");
+        assertTrue((Long) method.invoke(service, "", "2023-01-02") > 0L,
+                "只到日期也要能解析");
+        assertEquals(0L, (Long) method.invoke(service, "", ""),
+                "取不出来必须是 0：调用方据此拒绝按不可信的排序做删除");
+    }
+
+    private Object field(Object target, String name) throws Exception {
+        return target.getClass().getDeclaredMethod(name).invoke(target);
+    }
+
+    private Object driveFile(Class<?> type, String title, String token, long createTime) throws Exception {
+        Constructor<?> ctor = type.getDeclaredConstructor(String.class, String.class, long.class, String.class);
+        ctor.setAccessible(true);
+        return ctor.newInstance(title, token, createTime, "");
+    }
+
+    private Object intent(Class<?> type, boolean deleteIntent, boolean oldest, int count, boolean createdByMe)
+            throws Exception {
+        Constructor<?> ctor = type.getDeclaredConstructor(boolean.class, boolean.class, int.class, boolean.class);
+        ctor.setAccessible(true);
+        return ctor.newInstance(deleteIntent, oldest, count, createdByMe);
+    }
+
+    private List<String> titles(List<Object> files) throws Exception {
+        List<String> titles = new ArrayList<>();
+        for (Object file : files) {
+            titles.add((String) file.getClass().getMethod("title").invoke(file));
+        }
+        return titles;
     }
 
     @Test
