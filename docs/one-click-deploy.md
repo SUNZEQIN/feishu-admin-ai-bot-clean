@@ -108,13 +108,17 @@ cd /opt/feishu-admin-ai-bot-clean && bash scripts/deploy.sh
 cd /opt/feishu-admin-ai-bot-clean-test && bash scripts/deploy.sh
 ```
 
-**必须改的 3 个配置**（在测试环境的 `.env` 里）：
+**必须改的 4 个配置**（在测试环境的 `.env` 里）：
 
 | 配置 | 正式环境 | 测试环境 | 不改会怎样 |
 | --- | --- | --- | --- |
 | `SERVER_PORT` | `8082` | `8091` | 端口被占用，容器起不来 |
 | `CONTAINER_NAME` | `feishu-admin-ai-bot-clean` | `feishu-admin-ai-bot-clean-test` | 容器名冲突，报 name already in use |
 | `FEISHU_OAUTH_REDIRECT_URI` | `...:8082/...` | `...:8091/...` | 扫码授权后回调打不开 |
+| `MYSQL_URL`（库名部分） | `.../feishu_admin_bot?...` | `.../feishu_admin_bot_test?...` | 测试环境直接读写正式库的数据（容器不报错，最危险） |
+
+`MYSQL_URL` 这一条特别容易漏：库名写错/没改时**服务照样启动、健康检查照样通过**，只是数据落进了正式库，
+所以只能靠上线后核对连接落点来发现 —— 见下面「验证环境隔离」。
 
 选端口时注意同一台服务器上已有的占用：`8081` 是 Dify 的 nginx，`8082` 是正式环境，`8090` 是
 `ecommerce-mcp-server`（也正是机器人自己通过 `FEISHU_ECOMMERCE_MCP_BASE_URL` 调用的后端）。
@@ -123,6 +127,25 @@ cd /opt/feishu-admin-ai-bot-clean-test && bash scripts/deploy.sh
 改端口后除了 `.env`，还要**同步改飞书开放平台里 OAuth 重定向 URL 的白名单**，否则扫码授权会失败。
 
 注意：**飞书事件回调地址只能指向其中一个环境**。两个容器同时跑不会「双份回复」，但只有回调地址指向的那个环境能收到消息。切环境要去飞书开放平台改事件订阅地址，并在云服务器安全组放行对应端口。
+
+### 5.2 验证环境隔离
+
+`MYSQL_URL` 配错不会报错，所以每次改完数据库配置，都要**从数据库侧回头看谁连了哪个库**：
+
+```bash
+# 1. 看每个容器在 feishu-net 里的 IP
+docker inspect -f '{{.Name}} -> {{.NetworkSettings.Networks.feishu-net.IPAddress}}' \
+  $(docker ps -q --filter "name=feishu-admin-ai-bot-clean")
+
+# 2. 看每个连接落在哪个库（用机器人自己的账号即可）
+docker exec -e MYSQL_PWD="$(grep -E '^MYSQL_PASSWORD=' .env | cut -d= -f2-)" \
+  mysql mysql -ufeishu_bot -N -e \
+  "SELECT host, db, command FROM information_schema.processlist WHERE user='feishu_bot'"
+```
+
+期望结果：正式容器的 IP 只出现在 `feishu_admin_bot`，测试容器的 IP 只出现在 `feishu_admin_bot_test`。
+两边的 IP 混在同一个库里，就说明 `.env` 的库名没改，或者改了没重建容器
+（`env_file` 只在容器创建时读取，**必须 `docker compose up -d --force-recreate`**，只 `restart` 不生效）。
 
 ## 6. 查看服务状态
 
