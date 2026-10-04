@@ -62,12 +62,16 @@ public class SkillCliExecutorService {
     // 用户身份 scope 映射服务，用来按业务域生成授权 scope。
     private final FeishuUserScopeMappingService scopeMappingService;
 
+    // 破坏性命令闸门：高风险写操作必须由用户原话确认，不允许模型自动确认。
+    private final DestructiveCommandGuard destructiveCommandGuard;
+
     // CLI 内部规划器使用的大模型。
     private final ChatModel chatModel;
 
     public SkillCliExecutorService(FeishuProperties properties, JsonUtils jsonUtils,
             FeishuOpenApiService openApiService, UserOAuthTokenService userOAuthTokenService,
-            FeishuUserScopeMappingService scopeMappingService) {
+            FeishuUserScopeMappingService scopeMappingService,
+            DestructiveCommandGuard destructiveCommandGuard) {
         // 保存飞书配置。
         this.properties = properties;
 
@@ -82,6 +86,9 @@ public class SkillCliExecutorService {
 
         // 保存用户身份 scope 映射服务。
         this.scopeMappingService = scopeMappingService;
+
+        // 保存破坏性命令闸门。
+        this.destructiveCommandGuard = destructiveCommandGuard;
 
         // 创建 CLI 内部规划器模型。
         this.chatModel = buildChatModel(properties);
@@ -189,6 +196,21 @@ public class SkillCliExecutorService {
 
             // 校验命令是否允许执行。
             List<String> command = normalizeCommand(decision.command(), goal, normalizedDomain, senderOpenId);
+
+            // 破坏性操作闸门：高风险写操作不允许模型自行确认，必须由用户原话明确确认。
+            // 之前的事故就是模型给 drive +delete 自己加了 --yes，一句话删掉了 4 个真实多维表格。
+            DestructiveCommandGuard.Decision guardDecision = destructiveCommandGuard.check(command, goal);
+            if (guardDecision.blocked()) {
+                log.warn("[阶段6 CLI执行] 破坏性命令已拦截，等待用户确认：业务域={}，步骤={}，命令={}，命中={}",
+                        normalizedDomain, step, command, guardDecision.matchedToken());
+                return Map.of(
+                        "domain", normalizedDomain,
+                        "goal", goal,
+                        "sourceChatId", sourceChatId,
+                        "finalReply", destructiveConfirmReply(command),
+                        "observations", observations
+                );
+            }
 
             // 如果模型重复执行已经成功过的相同命令，跳过真实调用，避免浪费步骤和重复请求飞书。
             if (hasSuccessfulCommand(observations, command)) {
@@ -328,6 +350,26 @@ public class SkillCliExecutorService {
         }
 
         return "";
+    }
+
+    /**
+     * 组装破坏性操作的确认提示。
+     *
+     * <p>关键点：把「将要执行什么」写清楚，并明确告诉用户不回复就等于不执行。
+     * 用户确认后会用一条新消息触发新一轮任务，会话记忆里带着原来的目标。</p>
+     */
+    private String destructiveConfirmReply(List<String> command) {
+        // 命令可能很长，截断后再展示，避免飞书消息过长。
+        String commandText = String.join(" ", command);
+        int limit = 400;
+        if (commandText.length() > limit) {
+            commandText = commandText.substring(0, limit) + "...";
+        }
+
+        return "⚠️ 这是一次高风险操作，需要你确认后才会执行。\n\n"
+                + "将要执行：\n" + commandText + "\n\n"
+                + "如果确认无误，请回复「确认执行」，我会继续。\n"
+                + "如果不回复或回复其它内容，我不会做任何改动。";
     }
 
     /**

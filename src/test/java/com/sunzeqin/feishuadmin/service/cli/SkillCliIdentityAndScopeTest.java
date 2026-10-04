@@ -173,7 +173,8 @@ class SkillCliIdentityAndScopeTest {
                 new JsonUtils(new ObjectMapper()),
                 mock(FeishuOpenApiService.class),
                 tokenService,
-                scopeMapping);
+                scopeMapping,
+                new DestructiveCommandGuard());
     }
 
     private FeishuUserScopeMappingService scopeMappingWith(String scopeText) {
