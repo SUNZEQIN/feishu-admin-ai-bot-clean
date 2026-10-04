@@ -188,7 +188,7 @@ public class SkillCliExecutorService {
             }
 
             // 校验命令是否允许执行。
-            List<String> command = normalizeCommand(decision.command(), goal);
+            List<String> command = normalizeCommand(decision.command(), goal, normalizedDomain, senderOpenId);
 
             // 如果模型重复执行已经成功过的相同命令，跳过真实调用，避免浪费步骤和重复请求飞书。
             if (hasSuccessfulCommand(observations, command)) {
@@ -196,6 +196,17 @@ public class SkillCliExecutorService {
                 log.warn("[阶段5 SkillCLI规划] 重复命令已跳过：业务域={}，步骤={}，命令={}", normalizedDomain, step, command);
                 observations.add(new CliCommandResult(String.join(" ", command), 0, message, ""));
                 continue;
+            }
+
+            // 同一条命令第二次失败时不再重试，直接把真实原因抛给上层。
+            // 这类重复通常意味着：模型认为应该这么调，但 Java 侧的策略把命令改成了必然失败的形态。
+            // 继续循环只会烧完剩余步数，最后报一句和真实问题无关的「超过最大步骤数」。
+            String previousFailure = previousFailureReason(observations, command);
+            if (previousFailure != null) {
+                log.warn("[阶段5 SkillCLI规划] 同一条命令重复失败，停止重试：业务域={}，步骤={}，命令={}，上次失败={}",
+                        normalizedDomain, step, command, previousFailure);
+                throw new IllegalStateException("同一条命令重复失败，已停止重试。命令="
+                        + String.join(" ", command) + "；上次失败原因=" + previousFailure);
             }
 
             // 执行 CLI 命令。
@@ -207,8 +218,12 @@ public class SkillCliExecutorService {
             // CLI 明确返回缺少用户授权 scope 时，生成授权链接并停止当前任务。
             String missingScopes = extractMissingScopes(commandResult);
             if (!missingScopes.isBlank()) {
+                // 从报错文本里抠出来的 scope 通常只是当前这一条命令用到的子集。
+                // 只按它授权的话，用户扫完码换一条命令又会缺权限，被迫二次授权。
+                // 这里按当前业务域补齐成完整集合，保证一次授权覆盖整个业务域。
+                String requiredScopes = mergeWithDomainScopes(normalizedDomain, missingScopes);
                 String authorizeUrl = buildAuthorizeUrl(sourceChatId, originalMessageId, senderOpenId,
-                        senderUserId, missingScopes);
+                        senderUserId, requiredScopes);
                 String reply = "需要你授权后才能继续执行。\n\n"
                         + "请扫描二维码完成授权。\n\n"
                         + "授权完成后，系统会保存到用户表并定时刷新 token。";
@@ -216,7 +231,7 @@ public class SkillCliExecutorService {
                         "domain", normalizedDomain,
                         "goal", goal,
                         "sourceChatId", sourceChatId,
-                        "requiredScopes", missingScopes,
+                        "requiredScopes", requiredScopes,
                         "authorizeUrl", authorizeUrl,
                         "finalReply", reply,
                         "observations", observations
@@ -224,8 +239,13 @@ public class SkillCliExecutorService {
             }
         }
 
-        // 超过最大步骤数还没结束，就抛出异常。
-        throw new IllegalStateException("Skill + CLI 超过最大步骤数，已停止执行");
+        // 超过最大步骤数还没结束，就抛出异常，并带上最后一次失败的真实原因。
+        // 只报「超过最大步骤数」会把真实问题（例如某个身份不被支持）完全藏起来。
+        String lastFailure = lastFailureSummary(observations);
+        if (lastFailure.isBlank()) {
+            throw new IllegalStateException("Skill + CLI 超过最大步骤数，已停止执行");
+        }
+        throw new IllegalStateException("Skill + CLI 超过最大步骤数，已停止执行。最后一次失败原因：" + lastFailure);
     }
 
     private boolean hasSuccessfulCommand(List<CliCommandResult> observations, List<String> command) {
@@ -242,6 +262,112 @@ public class SkillCliExecutorService {
 
         // 没有重复成功命令。
         return false;
+    }
+
+    /**
+     * 判断同一条命令是否已经失败过一次。
+     *
+     * <p>返回上次的失败原因摘要；没有失败过则返回 null。</p>
+     *
+     * <p>为什么只允许失败一次就停：命令文本完全相同，说明模型没有换思路，重试不会得到
+     * 不同结果。允许一次是为了给「间隔中状态发生变化」留余地（例如刚完成授权），
+     * 第二次还失败就基本可以确定是死循环，必须停下来把真实原因暴露给用户。</p>
+     */
+    private String previousFailureReason(List<CliCommandResult> observations, List<String> command) {
+        // 命令文本，和历史 observation 保持同一格式。
+        String commandText = String.join(" ", command);
+
+        // 统计同一条命令失败过几次，并记录最后一次失败原因。
+        int failureCount = 0;
+        String lastReason = "";
+        for (CliCommandResult observation : observations) {
+            if (observation.exitCode() != 0 && commandText.equals(observation.command())) {
+                failureCount++;
+                lastReason = summarizeCommandFailure(observation);
+            }
+        }
+
+        // 已经失败过一次：本次就是第二次，停止重试。
+        if (failureCount >= 1) {
+            return lastReason.isBlank() ? "命令失败，退出码非 0" : lastReason;
+        }
+
+        return null;
+    }
+
+    /**
+     * 取最后一次失败命令的原因摘要，用于超步时报错。
+     */
+    private String lastFailureSummary(List<CliCommandResult> observations) {
+        // 从后往前找第一条失败的命令。
+        for (int i = observations.size() - 1; i >= 0; i--) {
+            CliCommandResult observation = observations.get(i);
+            if (observation.exitCode() != 0) {
+                String reason = summarizeCommandFailure(observation);
+                if (!reason.isBlank()) {
+                    return reason;
+                }
+            }
+        }
+
+        return "";
+    }
+
+    /**
+     * 把一条失败命令的输出压成一行可读原因，避免把整段 JSON 塞进用户回复。
+     */
+    private String summarizeCommandFailure(CliCommandResult observation) {
+        // 优先看 stderr，CLI 的失败原因基本都在这里。
+        String text = safeText(observation.stderr());
+        if (text.isBlank()) {
+            text = safeText(observation.stdout());
+        }
+
+        // 压掉换行和多余空白，只留一行。
+        String singleLine = text.replaceAll("\\s+", " ").trim();
+        if (singleLine.isBlank()) {
+            return "";
+        }
+
+        // 限制长度，避免飞书消息过长。
+        int limit = 300;
+        return singleLine.length() <= limit ? singleLine : singleLine.substring(0, limit) + "...";
+    }
+
+    /**
+     * 把报错文本里抽出的 scope，和当前业务域的完整 scope 集合合并。
+     *
+     * <p>问题背景：从 CLI 报错文本里用正则抠 scope，只能抠到当前这条命令提到的那几个，
+     * 比业务域真正需要的少得多。用户按这个子集授权之后，下一条命令又会缺权限，
+     * 于是被要求再次授权。这里统一按业务域补齐，保证一次授权就够用。</p>
+     */
+    private String mergeWithDomainScopes(String domain, String missingScopes) {
+        // 用 LinkedHashSet 去重并保持稳定顺序。
+        Set<String> merged = new LinkedHashSet<>();
+
+        // 先放业务域要求的完整 scope。
+        String domainScopes = scopeMappingService.scopeTextForDomain(domain);
+        if (domainScopes != null && !domainScopes.isBlank()) {
+            for (String item : domainScopes.split("\\s+")) {
+                if (!item.isBlank()) {
+                    merged.add(item.trim());
+                }
+            }
+        }
+
+        // 再补报错文本里出现、但业务域映射里没有的 scope，避免跨域场景漏掉。
+        if (missingScopes != null && !missingScopes.isBlank()) {
+            for (String item : missingScopes.split("\\s+")) {
+                if (!item.isBlank()) {
+                    merged.add(item.trim());
+                }
+            }
+        }
+
+        log.info("[阶段5 SkillCLI规划] 授权scope已按业务域补齐：业务域={}，报错抽取={}个，合并后={}个",
+                domain, missingScopes == null ? 0 : missingScopes.split("\\s+").length, merged.size());
+
+        return String.join(" ", merged);
     }
 
     private Map<String, Object> userAuthorizeResultIfNeeded(String normalizedDomain, String goal, String sourceChatId,
@@ -510,7 +636,7 @@ public class SkillCliExecutorService {
         return new CliStepDecision(type, reason, command, finalReply);
     }
 
-    private List<String> normalizeCommand(List<String> command, String goal) {
+    private List<String> normalizeCommand(List<String> command, String goal, String domain, String senderOpenId) {
         // 命令不能为空。
         if (command == null || command.isEmpty()) {
             throw new IllegalArgumentException("CLI 命令不能为空");
@@ -542,7 +668,7 @@ public class SkillCliExecutorService {
         }
 
         // 业务命令默认使用 bot 身份；只有用户明确要求用户身份时，才保留 user 身份。
-        normalizeIdentity(normalized, goal);
+        normalizeIdentity(normalized, goal, domain, senderOpenId);
 
         // 对今天/明天/后天这类相对日期做代码级校正，避免模型把历史日期写进日程。
         normalizeRelativeDateArguments(normalized, goal);
@@ -570,7 +696,7 @@ public class SkillCliExecutorService {
                 || "||".equals(value);
     }
 
-    private void normalizeIdentity(List<String> command, String goal) {
+    private void normalizeIdentity(List<String> command, String goal, String domain, String senderOpenId) {
         // help/config/auth/skills/schema 这类命令不处理身份参数。
         if (!needTenantAccessToken(command)) {
             return;
@@ -591,8 +717,8 @@ public class SkillCliExecutorService {
                     if (!"bot".equals(oldValue) && !"user".equals(oldValue)) {
                         log.warn("[阶段6 CLI执行] 身份参数已修正：原身份={}，新身份=bot，原因=只允许bot或user", oldValue);
                         command.set(i + 1, "bot");
-                    } else if ("user".equals(oldValue) && !explicitUserIdentityRequired(goal)) {
-                        log.warn("[阶段6 CLI执行] 身份参数已修正：原身份=user，新身份=bot，原因=用户没有明确要求用户身份");
+                    } else if ("user".equals(oldValue) && !userIdentityAllowed(goal, domain, senderOpenId)) {
+                        log.warn("[阶段6 CLI执行] 身份参数已修正：原身份=user，新身份=bot，原因=用户没有明确要求用户身份，且没有可用的用户token");
                         command.set(i + 1, "bot");
                     }
                 } else {
@@ -606,8 +732,8 @@ public class SkillCliExecutorService {
                 if (!"--as=bot".equals(part) && !"--as=user".equals(part)) {
                     log.warn("[阶段6 CLI执行] 身份参数已修正：原参数={}，新参数=--as=bot，原因=只允许bot或user", part);
                     command.set(i, "--as=bot");
-                } else if ("--as=user".equals(part) && !explicitUserIdentityRequired(goal)) {
-                    log.warn("[阶段6 CLI执行] 身份参数已修正：原参数=--as=user，新参数=--as=bot，原因=用户没有明确要求用户身份");
+                } else if ("--as=user".equals(part) && !userIdentityAllowed(goal, domain, senderOpenId)) {
+                    log.warn("[阶段6 CLI执行] 身份参数已修正：原参数=--as=user，新参数=--as=bot，原因=用户没有明确要求用户身份，且没有可用的用户token");
                     command.set(i, "--as=bot");
                 }
             }
@@ -618,6 +744,47 @@ public class SkillCliExecutorService {
             command.add("--as");
             command.add("bot");
             log.info("[阶段6 CLI执行] 身份参数已补充：身份=bot，原因=管理员机器人项目默认使用bot身份");
+        }
+    }
+
+    /**
+     * 判断这次 CLI 调用是否允许使用 --as user。
+     *
+     * <p>两条放行条件，满足其一即可：</p>
+     * <ol>
+     *   <li>用户原话明确要求用本人身份（{@link #explicitUserIdentityRequired}）；</li>
+     *   <li>调用人已经持有覆盖当前业务域的用户 token。</li>
+     * </ol>
+     *
+     * <p>为什么加上第二条：只要用户已经授权过，就没有理由再把模型正确给出的 --as user 改回 bot。
+     * 改回 bot 会让命令必然失败（bot 没有登录用户 open_id），模型看到失败再规划一次 --as user，
+     * Java 再改回 bot，双方各说各话，直到烧完所有步数。第二条只「承认已授权的身份」，
+     * 不会主动要求新的授权，所以不会凭空给用户弹二维码。</p>
+     */
+    private boolean userIdentityAllowed(String goal, String domain, String senderOpenId) {
+        // 条件一：用户原话明确要求本人身份。
+        if (explicitUserIdentityRequired(goal)) {
+            return true;
+        }
+
+        // 条件二：调用人已经有覆盖当前业务域的用户 token。
+        if (senderOpenId == null || senderOpenId.isBlank() || domain == null || domain.isBlank()) {
+            return false;
+        }
+
+        try {
+            String scopeText = scopeMappingService.scopeTextForDomain(domain);
+            boolean allowed = userOAuthTokenService.tokenHasScopes(senderOpenId, scopeText);
+            if (allowed) {
+                log.info("[阶段6 CLI执行] 身份参数保留user：用户openId={}，业务域={}，原因=已有覆盖该业务域的用户token",
+                        senderOpenId, domain);
+            }
+            return allowed;
+        } catch (Exception e) {
+            // token 查询失败时保守处理：不放行 user 身份。
+            log.warn("[阶段6 CLI执行] 查询用户token失败，按无token处理：用户openId={}，业务域={}，错误={}",
+                    senderOpenId, domain, e.getMessage());
+            return false;
         }
     }
 
@@ -637,7 +804,15 @@ public class SkillCliExecutorService {
                 || goal.contains("本人身份")
                 || goal.contains("用用户身份")
                 || goal.contains("以用户身份")
-                || goal.contains("用户身份执行");
+                || goal.contains("用户身份执行")
+                // 所有格表达：用户说「查询我名下的多维表格」，语义上就是在要求以本人身份执行。
+                // 这里只补语义无歧义的写法；刻意不加单独的「我的」，因为「把消息发到我的群里」
+                // 这类说法用机器人身份同样合理，加进去会让机器人无谓地弹二维码。
+                // 真正兜住漏判的是 previousFailureReason：判据再漏，也会在两次失败内停下并报出真实原因。
+                || goal.contains("我名下")
+                || goal.contains("我自己的")
+                || goal.contains("我本人")
+                || goal.contains("本人的");
     }
 
     private void normalizeRelativeDateArguments(List<String> command, String goal) {
