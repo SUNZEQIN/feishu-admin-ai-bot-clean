@@ -3,6 +3,8 @@
 - 角色：后端开发 AI（绑定 skill：`tdd` + `backend-developer/`）
 - 需求来源：`docs/prd-ecommerce-v1.md`（产品经理，已评审）
 - 验收来源：`docs/test-cases-ecommerce-v1.md`（测试 / QA）
+- 规则总账：`docs/product-rules.md`（80 条项目级规则）
+- 差距清单：`docs/dev-backlog-product-rules.md`（32 条待开发/修改，含 P0 5 条）
 - 判断原则：一片一验收。每片都要有真实测试输出，不允许“看起来做完了”。
 
 ## 0. 项目基线
@@ -37,7 +39,7 @@
 验收对照（已有单测）：EC-11、EC-12、EC-14、EC-15、EC-16 的判定逻辑。
 证据：`Tests run: 52, Failures: 0, Errors: 0`。
 
-## 2. 切片 2 ⏳ 审计落库
+## 2. 切片 2 ⏳ 审计落库（覆盖规则 O-01/O-02/O-05、P-05）
 
 - `agent_task` 表 + `agent_tool_call_log` 表（PRD 4.3）
 - 每个任务有且仅有一行；每次工具调用一行；拦截记 `success=0, error_code=PERMISSION_DENIED`
