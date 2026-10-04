@@ -1,8 +1,8 @@
 # VC Skill
 
-作者：sunzeqin
+分层：第一层「飞书原生能力」，只描述 lark-cli 在该业务域能做什么、调用约定是什么。
 
-依据：`D:/codex项目/lark-project/飞书CLI命令手册.md`，CLI 版本 `1.0.95`。
+能力来源：以 `lark-cli <domain> --help` 的实时输出为准（编写时参考 CLI 版本 1.0.95）。
 
 ## 适用场景
 

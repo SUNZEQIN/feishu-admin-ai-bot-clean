@@ -1,7 +1,5 @@
 # Calendar Skill
 
-作者：sunzeqin
-
 ## 适用场景
 
 - 创建日程。

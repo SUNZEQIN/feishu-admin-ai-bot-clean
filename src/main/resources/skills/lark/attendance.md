@@ -4,7 +4,7 @@
 
 处理飞书考勤、打卡、出勤结果查询。
 
-参考命令手册：`D:/codex项目/lark-project/飞书CLI命令手册.md` 的「7. 考勤」章节。
+能力来源：以 `lark-cli attendance --help` 的实时输出为准。
 
 ## 业务域选择
 

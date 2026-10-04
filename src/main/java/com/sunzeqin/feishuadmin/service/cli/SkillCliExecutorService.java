@@ -986,8 +986,9 @@ public class SkillCliExecutorService {
 
     private String readSkill(String domain) {
         try {
-            // 从 resources/skills 读取对应业务域 Skill。
-            ClassPathResource resource = new ClassPathResource("skills/" + domain + ".md");
+            // 第一层 Skill：飞书原生能力，统一放在 resources/skills/lark 目录。
+            // 这一层只描述 lark-cli 在某个业务域能做什么、调用约定是什么，不掺业务规则。
+            ClassPathResource resource = new ClassPathResource("skills/lark/" + domain + ".md");
 
             // 如果没有对应 Skill，就使用通用说明。
             if (!resource.exists()) {

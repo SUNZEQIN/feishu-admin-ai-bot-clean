@@ -45,7 +45,8 @@ public class AgentPlannerService {
     // LangChain4j 聊天模型，未启用时为空。
     private final ChatModel chatModel;
 
-    // 电商 Agent Skill 提示词，从 resources/skills/ecommerce-agent.md 读取。
+    // 第二层 Skill：业务能力说明，从 resources/skills/business 目录读取。
+    // 这一层描述「业务规则」，例如电商需求该走哪条工具链，不描述飞书 CLI 命令细节。
     private final String ecommerceAgentSkill;
 
     public AgentPlannerService(FeishuProperties properties, JsonUtils jsonUtils, ToolRegistryService toolRegistry) {
@@ -58,8 +59,8 @@ public class AgentPlannerService {
         // 创建模型。
         this.chatModel = buildChatModel(properties);
 
-        // 读取电商 Agent Skill。
-        this.ecommerceAgentSkill = readSkill("skills/ecommerce-agent.md");
+        // 读取电商业务 Skill。
+        this.ecommerceAgentSkill = readSkill("skills/business/ecommerce-agent.md");
     }
 
     public boolean enabled() {
