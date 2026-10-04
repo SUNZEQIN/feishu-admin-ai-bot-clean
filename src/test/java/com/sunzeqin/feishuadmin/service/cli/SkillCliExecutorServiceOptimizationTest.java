@@ -114,9 +114,9 @@ class SkillCliExecutorServiceOptimizationTest {
 
         // 故意打乱顺序：CLI 的 --sort create_time 是降序，Java 不能依赖它。
         List<Object> files = List.of(
-                driveFile(fileType, "新", "tok-new", 3000L),
-                driveFile(fileType, "老", "tok-old", 1000L),
-                driveFile(fileType, "中", "tok-mid", 2000L));
+                driveFile(fileType, "新", "tok-new", 3000L, "DOC"),
+                driveFile(fileType, "老", "tok-old", 1000L, "DOC"),
+                driveFile(fileType, "中", "tok-mid", 2000L, "DOC"));
 
         @SuppressWarnings("unchecked")
         List<Object> oldest = (List<Object>) method.invoke(service, files,
@@ -154,10 +154,60 @@ class SkillCliExecutorServiceOptimizationTest {
         return target.getClass().getDeclaredMethod(name).invoke(target);
     }
 
-    private Object driveFile(Class<?> type, String title, String token, long createTime) throws Exception {
-        Constructor<?> ctor = type.getDeclaredConstructor(String.class, String.class, long.class, String.class);
+    @Test
+    void fileTitleComesFromTitleHighlightedNotResultMeta() throws Exception {
+        SkillCliExecutorService service = service();
+        Method method = SkillCliExecutorService.class.getDeclaredMethod(
+                "parseTitle", com.fasterxml.jackson.databind.JsonNode.class);
+        method.setAccessible(true);
+        ObjectMapper mapper = new ObjectMapper();
+
+        // 真实返回里 result_meta 没有 title，名字在条目的 title_highlighted 上。
+        assertEquals("孙泽勤近12个月订单", method.invoke(service, mapper.readTree(
+                "{\"entity_type\":\"DOC\",\"result_meta\":{\"token\":\"tok\"},"
+                        + "\"title_highlighted\":\"孙泽勤近12个月订单\"}")),
+                "名称必须从 title_highlighted 取，result_meta 里没有 title");
+
+        assertEquals("季度报表", method.invoke(service, mapper.readTree(
+                "{\"title_highlighted\":\"<em>季度</em>报表\"}")),
+                "高亮标签要去掉，否则名字里会混进标签");
+
+        assertEquals("(无标题)", method.invoke(service, mapper.readTree("{\"result_meta\":{}}")),
+                "确实没有名字时才回落到占位文案");
+    }
+
+    @Test
+    void wikiFilesAndDriveFilesUseDifferentDeleteCommands() throws Exception {
+        Class<?> fileType = Class.forName(
+                "com.sunzeqin.feishuadmin.service.cli.SkillCliExecutorService$DriveFile");
+
+        SkillCliExecutorService service = service();
+        Method method = SkillCliExecutorService.class.getDeclaredMethod("deleteCommand", fileType);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<String> wiki = (List<String>) method.invoke(service,
+                driveFile(fileType, "知识库里的表", "wiknode01", 1000L, "WIKI"));
+        assertTrue(wiki.contains("wiki") && wiki.contains("+node-delete"),
+                "知识库节点必须走 wiki +node-delete，用 drive +delete 会报 1061003 not found");
+        assertTrue(wiki.contains("--node-token") && wiki.contains("wiknode01"),
+                "wiki 删除要传 node_token");
+
+        @SuppressWarnings("unchecked")
+        List<String> drive = (List<String>) method.invoke(service,
+                driveFile(fileType, "云盘里的表", "filetok01", 1000L, "DOC"));
+        assertTrue(drive.contains("drive") && drive.contains("+delete"),
+                "云盘文件走 drive +delete");
+        assertTrue(drive.contains("--file-token") && drive.contains("filetok01"),
+                "drive 删除要传 file_token");
+    }
+
+    private Object driveFile(Class<?> type, String title, String token, long createTime, String entityType)
+            throws Exception {
+        Constructor<?> ctor = type.getDeclaredConstructor(
+                String.class, String.class, long.class, String.class, String.class);
         ctor.setAccessible(true);
-        return ctor.newInstance(title, token, createTime, "");
+        return ctor.newInstance(title, token, createTime, "", entityType);
     }
 
     private Object intent(Class<?> type, boolean deleteIntent, boolean oldest, int count, boolean createdByMe)

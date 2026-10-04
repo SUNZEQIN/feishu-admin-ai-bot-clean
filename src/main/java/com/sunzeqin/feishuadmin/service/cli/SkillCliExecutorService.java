@@ -766,8 +766,12 @@ public class SkillCliExecutorService {
 
     /**
      * 一个云盘文件的最小信息，够排序、够删除。
+     *
+     * @param entityType 搜索结果里的 entity_type：DOC = 云盘文件，WIKI = 知识库节点。
+     *                   两者的 token 含义不同，删除命令也不同，不能混用。
      */
-    private record DriveFile(String title, String token, long createTime, String createTimeText) {
+    private record DriveFile(String title, String token, long createTime, String createTimeText,
+            String entityType) {
     }
 
     /**
@@ -830,6 +834,11 @@ public class SkillCliExecutorService {
         // 创建时间没解析出来时排序不可信，绝不能凭不可信的排序去删除。
         boolean unreliableOrder = targets.stream().anyMatch(file -> file.createTime() <= 0);
 
+        // 只认两种删除通路：云盘文件（DOC）和知识库节点（WIKI）。
+        // 其它类型没有验证过的删除方式，宁可不做，也不要拿错误的 token 去删。
+        boolean unsupportedType = targets.stream()
+                .anyMatch(file -> !isWikiFile(file) && !isDriveFile(file));
+
         // 只想看清单：直接把最早的 N 个报出来。
         if (!intent.deleteIntent()) {
             return taskResult(normalizedDomain, goal, sourceChatId, observations,
@@ -843,6 +852,12 @@ public class SkillCliExecutorService {
                             + "本次按顺序取到的是：\n\n" + formatFileList(targets), false);
         }
 
+        if (unsupportedType) {
+            return taskResult(normalizedDomain, goal, sourceChatId, observations,
+                    "⚠️ 目标里有我没验证过删除方式的文件类型，为安全起见没有执行任何删除。\n\n"
+                            + "本次按顺序取到的是：\n\n" + formatFileList(targets), false);
+        }
+
         // 破坏性操作走同一道闸门：用户这次的话里没有明确确认，就只问不做。
         List<String> deleteCommand = deleteCommand(targets.get(0));
         DestructiveCommandGuard.Decision guardDecision = destructiveCommandGuard.check(deleteCommand, goal);
@@ -850,7 +865,7 @@ public class SkillCliExecutorService {
             log.info("[阶段5 SkillCLI规划] Top-N 删除等待用户确认：目标={}，数量={}", goal, targets.size());
             return taskResult(normalizedDomain, goal, sourceChatId, observations,
                     "⚠️ 这是高风险操作，需要你确认后才会执行。\n\n"
-                            + "将从你名下删除这 " + targets.size() + " 个**创建时间最早**的多维表格：\n\n"
+                            + "将从你名下删除这 " + targets.size() + " 个创建时间最早的多维表格：\n\n"
                             + formatFileList(targets)
                             + "\n确认无误请回复「确认删除」，我会继续。\n"
                             + "不回复或回复其它内容，我不会做任何改动。", true);
@@ -964,10 +979,13 @@ public class SkillCliExecutorService {
                 String createTimeRaw = meta.path("create_time").asText("");
                 String createTimeIso = meta.path("create_time_iso").asText("");
                 files.add(new DriveFile(
-                        meta.path("title").asText("(无标题)"),
+                        // 名称在结果条目的 title_highlighted 上，不在 result_meta 里。
+                        // 早期版本读了 result_meta.title，结果全是「(无标题)」。
+                        parseTitle(node),
                         token,
                         parseCreateTime(createTimeRaw, createTimeIso),
-                        createTimeIso.isBlank() ? createTimeRaw : createTimeIso));
+                        createTimeIso.isBlank() ? createTimeRaw : createTimeIso,
+                        node.path("entity_type").asText("")));
             }
 
             pageToken = data.path("page_token").asText("");
@@ -1036,7 +1054,51 @@ public class SkillCliExecutorService {
         return new ArrayList<>(sorted.subList(0, Math.min(intent.count(), sorted.size())));
     }
 
+    /**
+     * 取一个搜索结果的名称。
+     *
+     * <p>名称在条目的 title_highlighted 上（可能带高亮标签），不在 result_meta 里。</p>
+     */
+    private String parseTitle(JsonNode node) {
+        for (String candidate : List.of(
+                node.path("title_highlighted").asText(""),
+                node.path("result_meta").path("title").asText(""))) {
+            if (candidate == null || candidate.isBlank()) {
+                continue;
+            }
+            // 去掉可能的高亮标签，避免名字里混进 <em> 之类。
+            String cleaned = candidate.replaceAll("<[^>]+>", "").trim();
+            if (!cleaned.isBlank()) {
+                return cleaned;
+            }
+        }
+        return "(无标题)";
+    }
+
+    private boolean isWikiFile(DriveFile file) {
+        return "WIKI".equalsIgnoreCase(file.entityType());
+    }
+
+    private boolean isDriveFile(DriveFile file) {
+        return "DOC".equalsIgnoreCase(file.entityType());
+    }
+
+    /**
+     * 按文件来源选删除命令。
+     *
+     * <p>知识库里的多维表格要用 wiki +node-delete，token 是 wiki node_token；
+     * 云盘里的用 drive +delete，token 是 file_token。用错了会报 1061003 not found。</p>
+     */
     private List<String> deleteCommand(DriveFile file) {
+        if (isWikiFile(file)) {
+            return new ArrayList<>(List.of(properties.getCliCommand(), "wiki", "+node-delete",
+                    "--node-token", file.token(),
+                    "--obj-type", "wiki",
+                    "--yes",
+                    "--as", "user",
+                    "--format", "json"));
+        }
+
         return new ArrayList<>(List.of(properties.getCliCommand(), "drive", "+delete",
                 "--file-token", file.token(),
                 "--type", "bitable",
@@ -1050,6 +1112,9 @@ public class SkillCliExecutorService {
         int index = 1;
         for (DriveFile file : files) {
             builder.append(index++).append(". ").append(file.title());
+            if (isWikiFile(file)) {
+                builder.append("（知识库里的）");
+            }
             if (!file.createTimeText().isBlank()) {
                 builder.append("（创建于 ").append(file.createTimeText()).append("）");
             }
