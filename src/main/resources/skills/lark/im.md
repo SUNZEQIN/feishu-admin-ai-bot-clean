@@ -20,10 +20,11 @@
 4. 机器人入群通常需要 `app_id`，也就是 `cli_` 开头的应用 ID。
 5. 如果要从当前群复制成员，先查询当前群成员，再按名称筛选。
 6. 如果命令失败，要根据 stderr/stdout 调整命令，不要重复执行同一条错误命令。
-7. 查询列表类数据时优先使用 `--page-all`，如果命令需要 `--page-size`，不要超过 50。
-8. 向当前群返回结果、卡片、Markdown 或文本时，优先使用 `lark-cli im +messages-reply` 引用 `originalMessageId`，不要直接 `+messages-send`。
-9. 群聊回复内容开头要 @ `senderOpenId` 对应的人，避免群里多人同时使用时看不清是谁的结果。
-10. 如果 `+messages-reply --help` 显示参数名和下面示例不一致，以当前 CLI help 为准。
+7. **本域**的群/消息类查询命令支持 `--page-all`（例如 `+chat-members-list`、`+chat-messages-list`）；**不要把 `--page-all` 套到别的业务域**——例如 `drive +search` 没有这个参数，写了会直接退出码 2。其他域是否支持以该域自己的说明/help 为准。
+8. `--page-size` 以该命令 help 给的范围为准，不要按习惯套别的域的上限。
+9. 向当前群返回结果、卡片、Markdown 或文本时，优先使用 `lark-cli im +messages-reply` 引用 `originalMessageId`，不要直接 `+messages-send`。
+10. 群聊回复内容开头要 @ `senderOpenId` 对应的人，避免群里多人同时使用时看不清是谁的结果。
+11. 如果 `+messages-reply --help` 显示参数名和下面示例不一致，以当前 CLI help 为准。
 
 ## 常见查询
 
