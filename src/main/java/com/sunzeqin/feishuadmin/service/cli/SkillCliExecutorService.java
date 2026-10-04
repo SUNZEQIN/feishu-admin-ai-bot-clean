@@ -218,6 +218,23 @@ public class SkillCliExecutorService {
             // CLI 明确返回缺少用户授权 scope 时，生成授权链接并停止当前任务。
             String missingScopes = extractMissingScopes(commandResult);
             if (!missingScopes.isBlank()) {
+                // 先判断这次"缺权限"到底缺的是谁的权限。
+                // 用户已经持有覆盖当前业务域的授权时，缺权限的不是用户，而是这条命令本身 ——
+                // 典型情况是需要本人数据的操作却用了 bot 身份。此时再弹一次二维码既没用又打扰用户，
+                // 改为把判断结果回灌给内层规划器，让它换身份或换命令重试。
+                // 循环安全由 previousFailureReason 兜住：模型真的换不出新命令时会在两次失败内停下。
+                if (hasUserTokenForDomain(senderOpenId, normalizedDomain)) {
+                    log.info("[阶段5 SkillCLI规划] 用户已持有业务域授权，缺权限的是命令本身，不再要求授权：业务域={}，命令={}",
+                            normalizedDomain, command);
+                    observations.add(new CliCommandResult("SYSTEM_HINT", 1,
+                            "本条命令因为缺少权限失败，但该用户已经完成本业务域的授权。"
+                                    + "缺的不是用户授权，而是这条命令本身：需要本人数据的操作必须用 --as user，"
+                                    + "bot 身份不支持 --mine 以及依赖登录用户的过滤参数。"
+                                    + "请改用正确的身份或换一条命令重试。上一条失败原因="
+                                    + summarizeCommandFailure(commandResult), ""));
+                    continue;
+                }
+
                 // 从报错文本里抠出来的 scope 通常只是当前这一条命令用到的子集。
                 // 只按它授权的话，用户扫完码换一条命令又会缺权限，被迫二次授权。
                 // 这里按当前业务域补齐成完整集合，保证一次授权覆盖整个业务域。
@@ -768,20 +785,32 @@ public class SkillCliExecutorService {
         }
 
         // 条件二：调用人已经有覆盖当前业务域的用户 token。
+        if (hasUserTokenForDomain(senderOpenId, domain)) {
+            log.info("[阶段6 CLI执行] 身份参数保留user：用户openId={}，业务域={}，原因=已有覆盖该业务域的用户token",
+                    senderOpenId, domain);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 判断调用人是否已经持有覆盖指定业务域的用户 token。
+     *
+     * <p>用于两处：一是决定是否保留 --as user；二是判断一次"缺权限"失败到底该不该让用户去授权。
+     * 只有明确返回 false（而不是抛异常）时才会拒绝，避免把查询异常误当成"没有授权"。</p>
+     */
+    private boolean hasUserTokenForDomain(String senderOpenId, String domain) {
+        // 缺少定位信息时无法判断，按没有 token 处理。
         if (senderOpenId == null || senderOpenId.isBlank() || domain == null || domain.isBlank()) {
             return false;
         }
 
         try {
             String scopeText = scopeMappingService.scopeTextForDomain(domain);
-            boolean allowed = userOAuthTokenService.tokenHasScopes(senderOpenId, scopeText);
-            if (allowed) {
-                log.info("[阶段6 CLI执行] 身份参数保留user：用户openId={}，业务域={}，原因=已有覆盖该业务域的用户token",
-                        senderOpenId, domain);
-            }
-            return allowed;
+            return userOAuthTokenService.tokenHasScopes(senderOpenId, scopeText);
         } catch (Exception e) {
-            // token 查询失败时保守处理：不放行 user 身份。
+            // token 查询失败时保守处理：按没有 token 对待。
             log.warn("[阶段6 CLI执行] 查询用户token失败，按无token处理：用户openId={}，业务域={}，错误={}",
                     senderOpenId, domain, e.getMessage());
             return false;

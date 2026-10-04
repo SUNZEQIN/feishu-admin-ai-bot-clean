@@ -120,6 +120,41 @@ class SkillCliIdentityAndScopeTest {
         assertEquals(merged.split("\\s+").length, distinct, "合并后不应有重复 scope");
     }
 
+    @Test
+    void keepsUserIdentityWhenUserAlreadyHoldsDomainToken() throws Exception {
+        String openId = "ou_holder";
+        String scopeText = "bitable:app base:record:read";
+
+        // 用户没有说「用我的身份」，但已经授权过整个业务域：此时不该再把 --as user 改回 bot，
+        // 否则命令必然失败、模型再规划一次、再被改回，形成来回死循环。
+        SkillCliExecutorService withToken = newService(scopeMappingWith(scopeText), tokenServiceWith(openId, scopeText, true));
+        assertTrue(invokeUserIdentityAllowed(withToken, "看看有哪些多维表格", "base", openId),
+                "已持有业务域 token 时应保留 --as user");
+
+        // 没有 token 时仍然回到机器人身份，避免无谓地弹二维码要求授权。
+        SkillCliExecutorService withoutToken = newService(scopeMappingWith(scopeText), tokenServiceWith(openId, scopeText, false));
+        assertFalse(invokeUserIdentityAllowed(withoutToken, "看看有哪些多维表格", "base", openId),
+                "没有 token 且用户没明确要求时不应保留 --as user");
+    }
+
+    @Test
+    void doesNotAskForAuthorizationWhenUserTokenAlreadyCoversDomain() throws Exception {
+        String openId = "ou_holder";
+        String scopeText = "bitable:app base:record:read";
+
+        SkillCliExecutorService service = newService(scopeMappingWith(scopeText), tokenServiceWith(openId, scopeText, true));
+
+        // 命令失败时，代码要靠这个判断区分「用户没授权」和「这条命令本身不对」。
+        assertTrue(invokeHasUserTokenForDomain(service, openId, "base"),
+                "已授权用户应判定为持有业务域 token");
+
+        // 缺少定位信息时保守返回 false，避免误判成已授权而跳过真正需要的授权。
+        assertFalse(invokeHasUserTokenForDomain(service, "", "base"),
+                "openId 为空时应判定为没有 token");
+        assertFalse(invokeHasUserTokenForDomain(service, openId, ""),
+                "业务域为空时应判定为没有 token");
+    }
+
     // ---------- 测试辅助 ----------
 
     private SkillCliExecutorService newService() {
@@ -127,13 +162,46 @@ class SkillCliIdentityAndScopeTest {
     }
 
     private SkillCliExecutorService newService(FeishuUserScopeMappingService scopeMapping) {
+        return newService(scopeMapping, mock(UserOAuthTokenService.class));
+    }
+
+    private SkillCliExecutorService newService(FeishuUserScopeMappingService scopeMapping,
+            UserOAuthTokenService tokenService) {
         // 用 Mock 构造依赖，避免测试依赖数据库、飞书网络和大模型。
         return new SkillCliExecutorService(
                 new FeishuProperties(),
                 new JsonUtils(new ObjectMapper()),
                 mock(FeishuOpenApiService.class),
-                mock(UserOAuthTokenService.class),
+                tokenService,
                 scopeMapping);
+    }
+
+    private FeishuUserScopeMappingService scopeMappingWith(String scopeText) {
+        FeishuUserScopeMappingService scopeMapping = mock(FeishuUserScopeMappingService.class);
+        when(scopeMapping.scopeTextForDomain("base")).thenReturn(scopeText);
+        return scopeMapping;
+    }
+
+    private UserOAuthTokenService tokenServiceWith(String openId, String scopeText, boolean hasScopes) {
+        UserOAuthTokenService tokenService = mock(UserOAuthTokenService.class);
+        when(tokenService.tokenHasScopes(openId, scopeText)).thenReturn(hasScopes);
+        return tokenService;
+    }
+
+    private boolean invokeUserIdentityAllowed(SkillCliExecutorService service, String goal, String domain,
+            String senderOpenId) throws Exception {
+        Method method = SkillCliExecutorService.class.getDeclaredMethod("userIdentityAllowed",
+                String.class, String.class, String.class);
+        method.setAccessible(true);
+        return (Boolean) method.invoke(service, goal, domain, senderOpenId);
+    }
+
+    private boolean invokeHasUserTokenForDomain(SkillCliExecutorService service, String senderOpenId, String domain)
+            throws Exception {
+        Method method = SkillCliExecutorService.class.getDeclaredMethod("hasUserTokenForDomain",
+                String.class, String.class);
+        method.setAccessible(true);
+        return (Boolean) method.invoke(service, senderOpenId, domain);
     }
 
     private boolean invokeBoolean(SkillCliExecutorService service, String methodName, String argument)
