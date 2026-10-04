@@ -84,13 +84,16 @@ public class FeishuProperties {
     private String cliCommand = "lark-cli";
 
     // Skill + CLI 内部最多执行多少轮。
-    private int cliMaxSteps = 8;
+    // 注意：默认值必须与 application.yml 的 FEISHU_CLI_MAX_STEPS 默认值一致，
+    // 否则单测与线上会跑在不同的步数上限上（规则 G-06）。
+    private int cliMaxSteps = 15;
 
     // 单条 CLI 命令最大等待秒数。
     private int cliTimeoutSeconds = 60;
 
     // 允许通过 Skill + CLI 执行的业务域。
-    private String cliAllowedDomains = "im,base,docs,calendar,vc,contact,approval,attendance";
+    // 注意：必须与 application.yml 的 FEISHU_CLI_ALLOWED_DOMAINS 一致（规则 G-06）。
+    private String cliAllowedDomains = "im,base,docs,calendar,vc,minutes,note,contact,approval,attendance,drive,wiki,markdown,mindnotes,whiteboard";
 
     // 是否启用电商 MCP 服务。
     private boolean ecommerceMcpEnabled = false;
@@ -130,6 +133,12 @@ public class FeishuProperties {
 
     // 电商 MCP 读取超时秒数。
     private int ecommerceMcpReadTimeoutSeconds = 15;
+
+    // 是否启用审计落库（agent_task + agent_tool_call_log）；关闭后只写日志，不落库。
+    private boolean auditEnabled = true;
+
+    // 是否给使用了电商数据的回复追加「数据来源：测试数据」标注。
+    private boolean ecommerceDataSourceNoticeEnabled = true;
 
     public String getBaseUrl() {
         // 返回飞书 OpenAPI 基础地址。
@@ -529,5 +538,25 @@ public class FeishuProperties {
     public void setEcommerceMcpReadTimeoutSeconds(int ecommerceMcpReadTimeoutSeconds) {
         // 设置读取超时秒数，最小值保护为 1 秒。
         this.ecommerceMcpReadTimeoutSeconds = Math.max(1, ecommerceMcpReadTimeoutSeconds);
+    }
+
+    public boolean isAuditEnabled() {
+        // 返回是否启用审计落库。
+        return auditEnabled;
+    }
+
+    public void setAuditEnabled(boolean auditEnabled) {
+        // 设置审计开关。
+        this.auditEnabled = auditEnabled;
+    }
+
+    public boolean isEcommerceDataSourceNoticeEnabled() {
+        // 返回是否追加数据来源标注。
+        return ecommerceDataSourceNoticeEnabled;
+    }
+
+    public void setEcommerceDataSourceNoticeEnabled(boolean ecommerceDataSourceNoticeEnabled) {
+        // 设置数据来源标注开关。
+        this.ecommerceDataSourceNoticeEnabled = ecommerceDataSourceNoticeEnabled;
     }
 }

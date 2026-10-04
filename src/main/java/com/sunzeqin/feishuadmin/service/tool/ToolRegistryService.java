@@ -3,6 +3,7 @@ package com.sunzeqin.feishuadmin.service.tool;
 import com.sunzeqin.feishuadmin.config.FeishuProperties;
 import com.sunzeqin.feishuadmin.pojo.role.BotRole;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolCall;
+import com.sunzeqin.feishuadmin.pojo.tool.ToolErrorCode;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
 import com.sunzeqin.feishuadmin.service.EcommerceMcpClientService;
 import com.sunzeqin.feishuadmin.service.FeishuUserScopeMappingService;
@@ -72,6 +73,9 @@ public class ToolRegistryService {
     // 角色解析服务，从数据库读取发送人角色（未登记按 L1）。
     private final BotRoleResolver botRoleResolver;
 
+    // 结果脱敏服务，负责按角色裁剪电商返回的字段。
+    private final ResultMaskingService maskingService;
+
     // 飞书配置，用来读取工具超时时间。
     private final FeishuProperties properties;
 
@@ -81,7 +85,7 @@ public class ToolRegistryService {
     public ToolRegistryService(SkillCliExecutorService skillCliExecutor, EcommerceMcpClientService ecommerceMcpClient,
             FeishuUserScopeMappingService scopeMappingService, ToolPermissionService toolPermissionService,
             RoleToolPermissionService roleToolPermissionService, BotRoleResolver botRoleResolver,
-            FeishuProperties properties) {
+            ResultMaskingService maskingService, FeishuProperties properties) {
         // 保存 Skill + CLI 执行服务。
         this.skillCliExecutor = skillCliExecutor;
 
@@ -99,6 +103,9 @@ public class ToolRegistryService {
 
         // 保存角色解析服务。
         this.botRoleResolver = botRoleResolver;
+
+        // 保存结果脱敏服务。
+        this.maskingService = maskingService;
 
         // 保存飞书配置。
         this.properties = properties;
@@ -208,7 +215,8 @@ public class ToolRegistryService {
         // 第二步：权限校验。判断调用者和会话是否有权限执行。
         ToolPermissionService.Decision permission = toolPermissionService.check(call);
         if (!permission.allowed()) {
-            ToolResult result = ToolResult.failed(call.name(), permission.reason());
+            ToolResult result = ToolResult.failed(call.name(), permission.reason(),
+                    ToolErrorCode.PERMISSION_DENIED.name());
             logResult(result);
             return result;
         }
@@ -217,14 +225,15 @@ public class ToolRegistryService {
         BotRole role = botRoleResolver.resolve(stringParam(call, "senderOpenId"));
         RoleToolPolicy.Decision roleDecision = roleToolPermissionService.check(call, role);
         if (!roleDecision.allowed()) {
-            ToolResult result = ToolResult.failed(call.name(), roleDecision.userMessage());
+            ToolResult result = ToolResult.failed(call.name(), roleDecision.userMessage(),
+                    roleDecision.errorCode() == null ? "" : roleDecision.errorCode().name());
             logResult(result);
             return result;
         }
 
         // 第四步：带超时执行。工具卡住时不能让 Agent 循环一起挂死。
         try {
-            ToolResult result = executeWithTimeout(call);
+            ToolResult result = executeWithTimeout(call, role);
             logResult(result);
             return result;
         } catch (Exception e) {
@@ -245,14 +254,14 @@ public class ToolRegistryService {
         }
     }
 
-    private ToolResult executeWithTimeout(ToolCall call) throws Exception {
+    private ToolResult executeWithTimeout(ToolCall call, BotRole role) throws Exception {
         // 读取配置的超时时间，最小 1 秒。
         int timeoutSeconds = Math.max(1, properties.getToolTimeoutSeconds());
 
         // 把工具执行交给独立线程池，主线程只负责等待。
         Future<ToolResult> future;
         try {
-            future = toolExecutor.submit(() -> dispatch(call));
+            future = toolExecutor.submit(() -> dispatch(call, role));
         } catch (RejectedExecutionException e) {
             // 线程池已满时直接失败，不再阻塞 Agent 循环。
             return ToolResult.failed(call.name(), "工具执行队列已满，请稍后再试");
@@ -282,7 +291,7 @@ public class ToolRegistryService {
         }
     }
 
-    private ToolResult dispatch(ToolCall call) {
+    private ToolResult dispatch(ToolCall call, BotRole role) {
         // 根据工具名称分发到 Skill + CLI 飞书统一入口。
         if ("cli.run_skill".equals(call.name())) {
             return runSkill(call);
@@ -300,7 +309,8 @@ public class ToolRegistryService {
 
         // 根据工具名称分发到电商 MCP 工具调用。
         if ("ecommerce.call_tool".equals(call.name())) {
-            return callEcommerceTool(call);
+            // 电商结果必须先按角色脱敏，再交给模型组织语言。
+            return maskingService.mask(role, call, callEcommerceTool(call));
         }
 
         // 理论上不会走到这里：execute 已经用白名单挡过一次。

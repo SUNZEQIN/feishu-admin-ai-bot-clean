@@ -38,7 +38,10 @@ public enum ToolErrorCode {
     PARTIAL("已完成：A。未完成：B（原因）。"),
 
     // 需要用户确认才能继续的写动作。
-    NEED_CONFIRM("将要执行：X。回复「确认执行」继续，其他回复视为取消。");
+    NEED_CONFIRM("将要执行：X。回复「确认执行」继续，其他回复视为取消。"),
+
+    // 未分类的内部异常：不把堆栈抛给用户，也不能假装成功。
+    INTERNAL_ERROR("系统处理出错，本次没有完成任务。请稍后再试或联系管理员。");
 
     // 用户可见的定稿文案。
     private final String reply;

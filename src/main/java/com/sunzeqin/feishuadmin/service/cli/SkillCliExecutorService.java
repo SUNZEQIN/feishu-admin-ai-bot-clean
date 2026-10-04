@@ -209,7 +209,10 @@ public class SkillCliExecutorService {
                         "goal", goal,
                         "sourceChatId", sourceChatId,
                         "finalReply", destructiveConfirmReply(command),
-                        "observations", observations
+                        "observations", observations,
+                        // 标记这是一次"等待确认"，让上层把任务状态记成 WAITING_CONFIRM，
+                        // 而不是当成一次成功任务（产品规则 O-02）。
+                        "needConfirm", true
                 );
             }
 

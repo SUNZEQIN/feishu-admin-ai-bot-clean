@@ -39,19 +39,35 @@
 验收对照（已有单测）：EC-11、EC-12、EC-14、EC-15、EC-16 的判定逻辑。
 证据：`Tests run: 52, Failures: 0, Errors: 0`。
 
-## 2. 切片 2 ⏳ 审计落库（覆盖规则 O-01/O-02/O-05、P-05）
+## 2. 切片 2 ✅ 审计落库（覆盖规则 O-01/O-02/O-05、P-05）
 
-- `agent_task` 表 + `agent_tool_call_log` 表（PRD 4.3）
-- 每个任务有且仅有一行；每次工具调用一行；拦截记 `success=0, error_code=PERMISSION_DENIED`
-- `ToolResult` 需要带上 `errorCode`，否则审计只能存文本
-- 验收对照：EC-41、EC-42、EC-43
+新增：
 
-## 3. 切片 3 ⏳ 脱敏与数据可信
+- `agent_task` + `agent_tool_call_log` 两张表（PRD 4.3）
+- `service/audit/`：`TaskAuditRepository` / `JdbcTaskAuditRepository` / `TaskAuditService`
+- `ToolResult` 增加 `errorCode`；`ToolErrorCode` 增加 `INTERNAL_ERROR`
+- 编排器落任务状态：SUCCESS / FAILED / PARTIAL / WAITING_CONFIRM（高风险闸门拦下时不再记成功）
+- 每次工具调用一行明细，入参/结果只存 SHA-256 摘要，不存原文
 
-- 工具层脱敏：L1 回复不得出现客户全名 / 手机号 / 地址 / 单笔金额
-- 空值与异常区分：空结果走 `EMPTY_RESULT`，异常走 `MCP_UNAVAILABLE`，不得当 0 处理
-- 数据来源标注：回复底部「数据来源：测试数据」
-- 验收对照：EC-13、EC-21、EC-22、EC-23、EC-24、EC-25
+验收对照：EC-41、EC-42、EC-43。
+证据：单测 8 条（假仓库）+ **真库验证**（腾讯云测试环境 MySQL `feishu_admin_bot`）：
+建表成功、越权任务落 `FAILED / PERMISSION_DENIED / intent_domain=ecommerce`、
+工具明细落 `success=0 / PERMISSION_DENIED`、验证数据已清理（leftover=0）。
+
+## 3. 切片 3 🟡 脱敏与数据可信（脱敏与来源标注已完成）
+
+已完成：
+
+- `ResultMaskingService`：L1 去成本价/客户字段，L2 去手机号/地址，密钥类字段全角色隐藏；
+  字符串里的手机号兜底打码；不修改原始数据
+- `DataSourceNoticeService`：用到电商数据的回复统一追加「数据来源：测试数据」（幂等）
+- 验收对照：EC-13 已有单测
+
+仍待做（P1）：
+
+- 空值与异常区分：空结果走 `EMPTY_RESULT`、电商不可用走 `MCP_UNAVAILABLE`，不得当 0 处理
+- 失败话术落代码：`ToolErrorCode` 已有 9 条定稿话术，但非权限路径仍由模型自由组织
+- 验收对照：EC-21、EC-22、EC-23、EC-24、EC-25
 
 ## 4. 切片 4 ⏳ 协作闭环
 

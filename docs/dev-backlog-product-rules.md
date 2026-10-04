@@ -15,15 +15,18 @@
 2. **补数据边界**：脱敏（判定已完成，脱敏还没做）
 3. **补"确认后"的机制**：挂起任务 + 确认只能消费一次
 
-## 1. P0 · 阻断试点（必须先做）
+## 1. P0 · 阻断试点（✅ 已完成，2026-10-04）
+
+> 本批全部落地：切片 1 + 切片 2 完成，单测 83 条全绿，
+> 并在腾讯云测试环境真库（MySQL `feishu_admin_bot`）验证建表与落库 SQL。
 
 | # | 规则 | 类型 | 现状（已核实） | 要动哪里 | 验收 |
 |---|---|---|---|---|---|
-| 1 | O-01 / O-02 审计三表 + 任务状态 | 开发 | `schema-mysql.sql` 只有 `bot_user_role`；`agent_task`、`agent_tool_call_log` 不存在；`AgentOrchestratorService` 只有 log 输出 | 建表 + `TaskAuditRepository` + Orchestrator 落任务/工具调用 | EC-41/42/43 |
-| 2 | P-05 拦截记 `error_code=PERMISSION_DENIED` | 开发 | 拒绝只写日志，`ToolResult` 里没有 errorCode 字段，审计无处落码 | `ToolResult` 加 errorCode + 审计写入 | EC-43 |
-| 3 | P-04 脱敏（L1 不得见成本价/手机号/地址/单笔金额） | 修改 + 开发 | **判定已完成**（切片 1，`RoleToolPolicy`）；**脱敏完全没做**：`ecommerce.query_low_inventory` 仍会带成本价，客户字段无按角色裁剪 | 工具返回后加结果裁剪层（`dispatch` 返回前） | EC-13 |
-| 4 | C-08 数据来源标注 | 开发（小） | 全项目搜不到「数据来源」四个字（Java 与 skills 都没有） | 电商类结果统一追加标注 | EC-01 |
-| 5 | G-06 代码默认值与 `application.yml` 一致 | 修改（10 分钟） | **产品说得对**：`FeishuProperties.cliMaxSteps=8` vs yml `15`；`cliAllowedDomains` 默认 8 个域 vs yml 15 个 | 对齐默认值，或让 yml 成为唯一来源 | 默认值对比 |
+| 1 | O-01 / O-02 审计三表 + 任务状态 | 开发 | ✅ `agent_task` + `agent_tool_call_log` 已建，状态含 PARTIAL / WAITING_CONFIRM；真库已验证 | `TaskAuditService` + 编排器落库 | EC-41/42/43 |
+| 2 | P-05 拦截记 `error_code=PERMISSION_DENIED` | 开发 | ✅ `ToolResult.errorCode` + 审计写入；真库落 `success=0 / PERMISSION_DENIED` | `ToolRegistryService` 拒绝路径补错误码 | EC-43 |
+| 3 | P-04 脱敏（L1 不得见成本价/手机号/地址/单笔金额） | 修改 + 开发 | ✅ `ResultMaskingService`：L1 去成本价与客户字段，L2 去手机号/地址，密钥类全隐藏 | 电商结果在进入模型前裁剪 | EC-13 |
+| 4 | C-08 数据来源标注 | 开发（小） | ✅ `DataSourceNoticeService`：用到电商数据的回复追加「数据来源：测试数据」 | 最终回复统一加工 | EC-01 |
+| 5 | G-06 代码默认值与 `application.yml` 一致 | 修改（10 分钟） | ✅ `cliMaxSteps=15`、域名 15 个已对齐，并加自动化断言防复发 | `FeishuPropertiesDefaultsTest` | 默认值对比 |
 
 > 第 5 条的真实影响要说清：线上被 yml 覆盖，所以线上行为是对的；但**单测和其它直接 `new FeishuProperties()` 的调用方拿到的是旧值**，等于测试环境和线上行为不一致。属于隐患，不是线上故障。
 

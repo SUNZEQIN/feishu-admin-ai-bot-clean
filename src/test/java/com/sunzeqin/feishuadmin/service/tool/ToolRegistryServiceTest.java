@@ -160,6 +160,42 @@ class ToolRegistryServiceTest {
         verify(ecommerce).callTool(any(), any());
     }
 
+    @Test
+    void masksEcommerceFieldsForL1ThroughRegistry() {
+        // P-04：L1 通过注册表拿到的电商结果必须已经脱敏（成本价、客户字段不出现）。
+        FeishuProperties properties = new FeishuProperties();
+        EcommerceMcpClientService ecommerce = mock(EcommerceMcpClientService.class);
+        when(ecommerce.callTool(any(), any())).thenReturn(Map.of("data", Map.of("products",
+                java.util.List.of(Map.of("name", "洗衣液", "stock", 3, "costPrice", 9.9, "customerName", "张伟")))));
+        registry = newRegistry(mock(SkillCliExecutorService.class), ecommerce, new BotRoleResolver(openId -> null),
+                properties);
+
+        ToolResult result = registry.execute(new ToolCall("ecommerce.call_tool", Map.of(
+                "toolName", "ecommerce.query_low_inventory",
+                "senderOpenId", "ou_l1")));
+
+        // 数据本身拿到了，但敏感字段已经被裁掉。
+        assertTrue(result.success());
+        assertTrue(result.data().toString().contains("洗衣液"));
+        assertFalse(result.data().toString().contains("costPrice"));
+        assertFalse(result.data().toString().contains("张伟"));
+    }
+
+    @Test
+    void recordsPermissionDeniedErrorCodeOnRoleDenial() {
+        // P-05：角色拒绝必须带错误码，供审计表落 PERMISSION_DENIED。
+        FeishuProperties properties = new FeishuProperties();
+        registry = newRegistry(mock(SkillCliExecutorService.class), mock(EcommerceMcpClientService.class),
+                new BotRoleResolver(openId -> null), properties);
+
+        ToolResult result = registry.execute(new ToolCall("ecommerce.call_tool", Map.of(
+                "toolName", "ecommerce.query_customer_orders",
+                "senderOpenId", "ou_l1")));
+
+        assertFalse(result.success());
+        assertEquals("PERMISSION_DENIED", result.errorCode());
+    }
+
     private ToolRegistryService newRegistry(SkillCliExecutorService cli, FeishuProperties properties) {
         // 默认场景：电商服务用 Mock，角色解析返回未登记（L1）。
         return newRegistry(cli, mock(EcommerceMcpClientService.class), new BotRoleResolver(openId -> null), properties);
@@ -169,6 +205,7 @@ class ToolRegistryServiceTest {
             BotRoleResolver roleResolver, FeishuProperties properties) {
         // 用 Mock 构造依赖，避免测试依赖数据库和飞书网络。
         return new ToolRegistryService(cli, ecommerce, mock(FeishuUserScopeMappingService.class),
-                new ToolPermissionService(properties), new RoleToolPermissionService(), roleResolver, properties);
+                new ToolPermissionService(properties), new RoleToolPermissionService(), roleResolver,
+                new ResultMaskingService(), properties);
     }
 }
