@@ -1,11 +1,13 @@
 package com.sunzeqin.feishuadmin.service.tool;
 
 import com.sunzeqin.feishuadmin.config.FeishuProperties;
+import com.sunzeqin.feishuadmin.pojo.role.BotRole;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolCall;
 import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
 import com.sunzeqin.feishuadmin.service.EcommerceMcpClientService;
 import com.sunzeqin.feishuadmin.service.FeishuUserScopeMappingService;
 import com.sunzeqin.feishuadmin.service.cli.SkillCliExecutorService;
+import com.sunzeqin.feishuadmin.service.role.BotRoleResolver;
 import com.sunzeqin.feishuadmin.utils.LlmErrorUtils;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -64,6 +66,12 @@ public class ToolRegistryService {
     // 工具调用权限校验服务，负责判断调用者和会话是否有权限。
     private final ToolPermissionService toolPermissionService;
 
+    // 按角色分级的权限服务，负责判断 L1/L2/L3 能否调用某个电商工具。
+    private final RoleToolPermissionService roleToolPermissionService;
+
+    // 角色解析服务，从数据库读取发送人角色（未登记按 L1）。
+    private final BotRoleResolver botRoleResolver;
+
     // 飞书配置，用来读取工具超时时间。
     private final FeishuProperties properties;
 
@@ -72,6 +80,7 @@ public class ToolRegistryService {
 
     public ToolRegistryService(SkillCliExecutorService skillCliExecutor, EcommerceMcpClientService ecommerceMcpClient,
             FeishuUserScopeMappingService scopeMappingService, ToolPermissionService toolPermissionService,
+            RoleToolPermissionService roleToolPermissionService, BotRoleResolver botRoleResolver,
             FeishuProperties properties) {
         // 保存 Skill + CLI 执行服务。
         this.skillCliExecutor = skillCliExecutor;
@@ -84,6 +93,12 @@ public class ToolRegistryService {
 
         // 保存权限校验服务。
         this.toolPermissionService = toolPermissionService;
+
+        // 保存按角色分级的权限服务。
+        this.roleToolPermissionService = roleToolPermissionService;
+
+        // 保存角色解析服务。
+        this.botRoleResolver = botRoleResolver;
 
         // 保存飞书配置。
         this.properties = properties;
@@ -198,7 +213,16 @@ public class ToolRegistryService {
             return result;
         }
 
-        // 第三步：带超时执行。工具卡住时不能让 Agent 循环一起挂死。
+        // 第三步：角色分级校验。角色来自数据库，模型无权决定谁是 L2。
+        BotRole role = botRoleResolver.resolve(stringParam(call, "senderOpenId"));
+        RoleToolPolicy.Decision roleDecision = roleToolPermissionService.check(call, role);
+        if (!roleDecision.allowed()) {
+            ToolResult result = ToolResult.failed(call.name(), roleDecision.userMessage());
+            logResult(result);
+            return result;
+        }
+
+        // 第四步：带超时执行。工具卡住时不能让 Agent 循环一起挂死。
         try {
             ToolResult result = executeWithTimeout(call);
             logResult(result);

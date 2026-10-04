@@ -6,6 +6,7 @@ import com.sunzeqin.feishuadmin.pojo.tool.ToolResult;
 import com.sunzeqin.feishuadmin.service.EcommerceMcpClientService;
 import com.sunzeqin.feishuadmin.service.FeishuUserScopeMappingService;
 import com.sunzeqin.feishuadmin.service.cli.SkillCliExecutorService;
+import com.sunzeqin.feishuadmin.service.role.BotRoleResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -123,9 +126,49 @@ class ToolRegistryServiceTest {
         assertEquals(4, descriptions.lines().filter(line -> line.matches("\\s*\\d+\\.\\s*[a-z][a-z0-9_.]+\\s*")).count());
     }
 
+    @Test
+    void deniesCustomerOrdersForUnregisteredL1Caller() {
+        // EC-11：未登记用户（L1）通过注册表查客户明细，必须在调用电商服务之前被拦下。
+        FeishuProperties properties = new FeishuProperties();
+        EcommerceMcpClientService ecommerce = mock(EcommerceMcpClientService.class);
+        registry = newRegistry(mock(SkillCliExecutorService.class), ecommerce, new BotRoleResolver(openId -> null),
+                properties);
+
+        ToolResult result = registry.execute(new ToolCall("ecommerce.call_tool", Map.of(
+                "toolName", "ecommerce.query_customer_orders",
+                "senderOpenId", "ou_l1")));
+
+        assertFalse(result.success());
+        assertTrue(result.message().contains("运营负责人权限"));
+        verify(ecommerce, never()).callTool(any(), any());
+    }
+
+    @Test
+    void allowsCustomerOrdersForRegisteredL2Caller() {
+        // EC-15：L2 通过注册表查客户明细应当真正调用电商服务。
+        FeishuProperties properties = new FeishuProperties();
+        EcommerceMcpClientService ecommerce = mock(EcommerceMcpClientService.class);
+        when(ecommerce.callTool(any(), any())).thenReturn(Map.of("rows", "ok"));
+        registry = newRegistry(mock(SkillCliExecutorService.class), ecommerce, new BotRoleResolver(openId -> "L2"),
+                properties);
+
+        ToolResult result = registry.execute(new ToolCall("ecommerce.call_tool", Map.of(
+                "toolName", "ecommerce.query_customer_orders",
+                "senderOpenId", "ou_l2")));
+
+        assertTrue(result.success());
+        verify(ecommerce).callTool(any(), any());
+    }
+
     private ToolRegistryService newRegistry(SkillCliExecutorService cli, FeishuProperties properties) {
+        // 默认场景：电商服务用 Mock，角色解析返回未登记（L1）。
+        return newRegistry(cli, mock(EcommerceMcpClientService.class), new BotRoleResolver(openId -> null), properties);
+    }
+
+    private ToolRegistryService newRegistry(SkillCliExecutorService cli, EcommerceMcpClientService ecommerce,
+            BotRoleResolver roleResolver, FeishuProperties properties) {
         // 用 Mock 构造依赖，避免测试依赖数据库和飞书网络。
-        return new ToolRegistryService(cli, mock(EcommerceMcpClientService.class),
-                mock(FeishuUserScopeMappingService.class), new ToolPermissionService(properties), properties);
+        return new ToolRegistryService(cli, ecommerce, mock(FeishuUserScopeMappingService.class),
+                new ToolPermissionService(properties), new RoleToolPermissionService(), roleResolver, properties);
     }
 }

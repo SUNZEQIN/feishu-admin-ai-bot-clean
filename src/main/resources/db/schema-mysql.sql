@@ -61,3 +61,14 @@ CREATE TABLE IF NOT EXISTS feishu_oauth_state (
     KEY idx_oauth_state_user (app_id, user_open_id),
     KEY idx_oauth_state_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='飞书OAuth授权状态表';
+
+CREATE TABLE IF NOT EXISTS bot_user_role (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    open_id VARCHAR(128) NOT NULL COMMENT '飞书用户open_id',
+    role VARCHAR(8) NOT NULL DEFAULT 'L1' COMMENT '角色等级：L1普通成员，L2运营负责人，L3管理员',
+    remark VARCHAR(255) NOT NULL DEFAULT '' COMMENT '备注：谁在什么时候加的这条名单',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_bot_user_role_open_id (open_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='机器人使用者角色表';
+
