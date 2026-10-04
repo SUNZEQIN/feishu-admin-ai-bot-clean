@@ -3,7 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: feishu-admin-ai-bot-clean
+    # 容器名可通过 .env 里的 CONTAINER_NAME 覆盖，便于在同一台服务器上
+    # 同时跑正式环境和测试环境（两个环境必须用不同容器名）。
+    container_name: ${CONTAINER_NAME:-feishu-admin-ai-bot-clean}
     restart: unless-stopped
     env_file:
       - .env

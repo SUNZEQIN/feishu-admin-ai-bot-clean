@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="feishu-admin-ai-bot-clean"
-APP_DIR="/opt/${APP_NAME}"
-CONTAINER_NAME="feishu-admin-ai-bot-clean"
+# 部署目录默认取「本脚本所在仓库的根目录」，而不是硬编码路径。
+# 这样同一份脚本可以部署任意一份克隆（例如 /opt/xxx 和 /opt/xxx-test），
+# 不会因为路径写死而去动到另一个正在跑的环境。
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="${APP_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+APP_NAME="${APP_NAME:-$(basename "${APP_DIR}")}"
+
+# 容器名默认跟随目录名，也可以用环境变量覆盖。
+# 两个环境必须用不同容器名，否则 docker 会报名字冲突。
+CONTAINER_NAME="${CONTAINER_NAME:-${APP_NAME}}"
 NETWORK_NAME="${NETWORK_NAME:-feishu-net}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 GIT_REPO_URL="${GIT_REPO_URL:-https://github.com/SUNZEQIN/feishu-admin-ai-bot-clean.git}"

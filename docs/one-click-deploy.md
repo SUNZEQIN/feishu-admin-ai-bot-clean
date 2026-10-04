@@ -96,6 +96,28 @@ bash scripts/deploy.sh
 | `GIT_REPO_URL` | `https://github.com/SUNZEQIN/feishu-admin-ai-bot-clean.git` | 原始 GitHub 仓库地址 |
 | `GIT_PROXY_PREFIX` | 空 | Git 代理前缀，例如 `https://ghproxy.net/` |
 
+## 5.1 同一台服务器跑正式环境和测试环境
+
+部署目录默认取「脚本所在仓库的根目录」，容器名默认跟随目录名，所以只要目录名不同，两个环境天然隔离：
+
+```bash
+# 正式环境
+cd /opt/feishu-admin-ai-bot-clean && bash scripts/deploy.sh
+
+# 测试环境（目录名不同 → 容器名 / compose 项目名 / 镜像名都不同）
+cd /opt/feishu-admin-ai-bot-clean-test && bash scripts/deploy.sh
+```
+
+**必须改的 3 个配置**（在测试环境的 `.env` 里）：
+
+| 配置 | 正式环境 | 测试环境 | 不改会怎样 |
+| --- | --- | --- | --- |
+| `SERVER_PORT` | `8082` | `8083` | 端口被占用，容器起不来 |
+| `CONTAINER_NAME` | `feishu-admin-ai-bot-clean` | `feishu-admin-ai-bot-clean-test` | 容器名冲突，报 name already in use |
+| `FEISHU_OAUTH_REDIRECT_URI` | `...:8082/...` | `...:8083/...` | 扫码授权后回调打不开 |
+
+注意：**飞书事件回调地址只能指向其中一个环境**。两个容器同时跑不会「双份回复」，但只有回调地址指向的那个环境能收到消息。切环境要去飞书开放平台改事件订阅地址，并在云服务器安全组放行对应端口。
+
 ## 6. 查看服务状态
 
 查看容器：
