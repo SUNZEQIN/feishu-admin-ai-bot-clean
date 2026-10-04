@@ -771,6 +771,16 @@ public class SkillCliExecutorService {
     }
 
     /**
+     * 盘点结果。
+     *
+     * @param ok             命令是否都成功
+     * @param rawResultCount 接口实际返回的条目数（未过滤）
+     * @param files          解析出来的文件
+     */
+    private record DriveFetchOutcome(boolean ok, int rawResultCount, List<DriveFile> files) {
+    }
+
+    /**
      * 确定性执行「列出 / 删除 我名下 (最早|最新) 的 N 个多维表格」。
      *
      * <p>为什么放到 Java：这个任务要的是「取全量 → 排序 → 挑 N 个」，属于数据搬运而不是判断。
@@ -795,14 +805,22 @@ public class SkillCliExecutorService {
 
         // 一次拿全，翻页由 Java 负责。
         List<CliCommandResult> observations = new ArrayList<>();
-        List<DriveFile> files = fetchAllDriveFiles(intent.createdByMe(), senderOpenId, observations);
-        if (files == null) {
+        DriveFetchOutcome fetch = fetchAllDriveFiles(intent.createdByMe(), senderOpenId, observations);
+        if (!fetch.ok()) {
             // 盘点本身失败：交回通用流程，让原来的失败提示链路去暴露真实原因。
             log.warn("[阶段5 SkillCLI规划] Top-N 盘点失败，交回通用流程：目标={}", goal);
             return Map.of();
         }
 
+        List<DriveFile> files = fetch.files();
         if (files.isEmpty()) {
+            // 接口有数据但一条都没解析出来，说明字段路径对不上，必须报出来而不是谎称「没有文件」。
+            if (fetch.rawResultCount() > 0) {
+                log.warn("[阶段5 SkillCLI规划] Top-N 字段解析异常：接口返回={}条，解析出=0条", fetch.rawResultCount());
+                return taskResult(normalizedDomain, goal, sourceChatId, observations,
+                        "⚠️ 找到了 " + fetch.rawResultCount() + " 个多维表格，但没能从返回结果里读出名称和 token，"
+                                + "本次没有执行任何删除。请把这条消息告诉开发者。", false);
+            }
             return taskResult(normalizedDomain, goal, sourceChatId, observations,
                     "没有在你名下找到多维表格。", false);
         }
@@ -904,11 +922,12 @@ public class SkillCliExecutorService {
     /**
      * 翻页取回「我名下所有多维表格」。
      *
-     * @return 文件列表；命令失败时返回 null（区别于「成功但没有文件」）
+     * @return 盘点结果；命令失败时 ok=false（区别于「成功但没有文件」）
      */
-    private List<DriveFile> fetchAllDriveFiles(boolean createdByMe, String senderOpenId,
+    private DriveFetchOutcome fetchAllDriveFiles(boolean createdByMe, String senderOpenId,
             List<CliCommandResult> observations) {
         List<DriveFile> files = new ArrayList<>();
+        int rawResultCount = 0;
         String pageToken = "";
 
         for (int page = 1; page <= MAX_SEARCH_PAGES; page++) {
@@ -927,11 +946,12 @@ public class SkillCliExecutorService {
             CliCommandResult result = executeCommand(command, senderOpenId);
             observations.add(result);
             if (result.exitCode() != 0) {
-                return null;
+                return new DriveFetchOutcome(false, rawResultCount, files);
             }
 
             JsonNode data = jsonUtils.readTree(result.stdout()).path("data");
             for (JsonNode node : data.path("results")) {
+                rawResultCount++;
                 JsonNode meta = node.path("result_meta");
                 String token = meta.path("token").asText("");
                 if (token.isBlank()) {
@@ -956,8 +976,9 @@ public class SkillCliExecutorService {
             }
         }
 
-        log.info("[阶段5 SkillCLI规划] Top-N 盘点完成：文件数量={}，翻页数={}", files.size(), observations.size());
-        return files;
+        log.info("[阶段5 SkillCLI规划] Top-N 盘点完成：接口返回={}条，解析出={}条，翻页数={}",
+                rawResultCount, files.size(), observations.size());
+        return new DriveFetchOutcome(true, rawResultCount, files);
     }
 
     /**
