@@ -35,6 +35,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Skill + CLI 执行服务。
@@ -526,8 +527,8 @@ public class SkillCliExecutorService {
     private String buildPrompt(String domain, String goal, String sourceChatId, String originalMessageId,
             String senderOpenId, String senderUserId,
             String skillText, List<CliCommandResult> observations) {
-        // 把 CLI 历史执行结果转成 JSON，方便模型阅读。
-        String observationText = jsonUtils.write(observations);
+        // 把 CLI 历史执行结果转成紧凑 JSON，避免完整搜索结果反复回灌模型导致越跑越慢。
+        String observationText = compactObservationText(observations);
 
         // 当前业务日期，专门用于“今天/明天/后天”这类相对时间换算。
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
@@ -610,6 +611,105 @@ public class SkillCliExecutorService {
                 """.formatted(today, today, tomorrow, dayAfterTomorrow,
                 domain, properties.getCliAllowedDomains(), sourceChatId,
                 originalMessageId, senderOpenId, senderUserId, goal, skillText, observationText);
+    }
+
+    /**
+     * 对“创建时间最早/最新的 N 个”这类 Top N 搜索做代码级收敛。
+     *
+     * <p>模型有时会为了“保险”先 page-size 20 再翻页拉全量，但用户只要 N 个候选项时，
+     * 真实需要的就是前 N 个。这里把 page-size 压到 N，减少 CLI 输出、模型上下文和总耗时。</p>
+     */
+    private void normalizeTopNCreateTimeSearch(List<String> command, String goal) {
+        // 只处理 drive +search。
+        if (command.size() < 3 || !"drive".equals(command.get(1)) || !"+search".equals(command.get(2))) {
+            return;
+        }
+
+        // 只处理创建时间排序的 Top N 查询。
+        if (!command.contains("--sort") || !command.contains("create_time")) {
+            return;
+        }
+
+        // 从用户目标里抽取“最早/最新/前 N 个”。
+        Integer requested = requestedTopN(goal);
+        if (requested == null || requested <= 0) {
+            return;
+        }
+
+        // 没有 page-size 就补一个；已有且过大则压小。
+        int pageSizeIndex = command.indexOf("--page-size");
+        if (pageSizeIndex < 0) {
+            command.add("--page-size");
+            command.add(String.valueOf(requested));
+            return;
+        }
+
+        // 参数不完整时补齐。
+        if (pageSizeIndex + 1 >= command.size()) {
+            command.add(String.valueOf(requested));
+            return;
+        }
+
+        // 只在现有 page-size 大于目标数量时收敛；小于目标时不放大，避免改变模型的保守选择。
+        try {
+            int current = Integer.parseInt(command.get(pageSizeIndex + 1));
+            if (current > requested) {
+                command.set(pageSizeIndex + 1, String.valueOf(requested));
+            }
+        } catch (NumberFormatException e) {
+            command.set(pageSizeIndex + 1, String.valueOf(requested));
+        }
+    }
+
+    private Integer requestedTopN(String goal) {
+        // 空目标无法判断。
+        if (goal == null || goal.isBlank()) {
+            return null;
+        }
+
+        // 必须是“最早/最新/前 N 个”这类 Top N 意图，普通搜索不改。
+        if (!goal.contains("最早") && !goal.contains("最新") && !goal.contains("前")) {
+            return null;
+        }
+
+        Matcher matcher = Pattern.compile("(\\d+)\\s*个").matcher(goal);
+        if (!matcher.find()) {
+            return null;
+        }
+        return Integer.parseInt(matcher.group(1));
+    }
+
+    /**
+     * 给内部规划器看的 observation 摘要。
+     *
+     * <p>完整 CLI JSON 仍保存在 observations 里供 Java 侧处理，但不再原样塞进 prompt。
+     * 否则搜索输出越大，每一轮 LLM 规划越慢，最终触发工具总超时。</p>
+     */
+    private String compactObservationText(List<CliCommandResult> observations) {
+        List<Map<String, Object>> compact = observations.stream()
+                .map(this::compactObservation)
+                .collect(Collectors.toList());
+        return jsonUtils.write(compact);
+    }
+
+    private Map<String, Object> compactObservation(CliCommandResult observation) {
+        return Map.of(
+                "command", safeText(observation.command()),
+                "exitCode", observation.exitCode(),
+                "stdout长度", length(observation.stdout()),
+                "stderr长度", length(observation.stderr()),
+                "stdout摘要", compactText(observation.stdout()),
+                "stderr摘要", compactText(observation.stderr())
+        );
+    }
+
+    private String compactText(String text) {
+        String value = safeText(text).replaceAll("\\s+", " ").trim();
+        int limit = 800;
+        if (value.length() <= limit) {
+            return value;
+        }
+        return value.substring(0, limit) + "...（已截断，原始长度=" + value.length() + "）";
     }
 
     private String extractMissingScopes(CliCommandResult commandResult) {
@@ -758,6 +858,9 @@ public class SkillCliExecutorService {
 
         // 对今天/明天/后天这类相对日期做代码级校正，避免模型把历史日期写进日程。
         normalizeRelativeDateArguments(normalized, goal);
+
+        // Top N 查询只拉用户真正需要的数量，避免先拉全量再翻页。
+        normalizeTopNCreateTimeSearch(normalized, goal);
 
         // 返回规范化命令。
         return normalized;
