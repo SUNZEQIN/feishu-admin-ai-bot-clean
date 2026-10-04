@@ -57,6 +57,17 @@ public class SkillCliExecutorService {
     // 更早的 observations 保留的 stdout 字符数：只留摘要，防止提示词无限膨胀。
     private static final int OLDER_STDOUT_LIMIT = 800;
 
+    /**
+     * 写操作子命令里的动作词。
+     *
+     * <p>写操作会改变远端状态，写完之后的查询结果可能已经过期，所以要允许重新查询同一条命令。
+     * 只看 + 子命令名；判错的代价很小：把读当成写，只是多放行一次重复查询。</p>
+     */
+    private static final List<String> WRITE_KEYWORDS = List.of(
+            "create", "update", "delete", "remove", "add", "upload", "move", "copy",
+            "send", "reply", "import", "patch", "set", "rename", "revert", "transfer",
+            "enable", "disable", "upsert", "invite", "assign", "batch");
+
     // 飞书配置，包含 CLI 开关、命令路径、大模型配置。
     private final FeishuProperties properties;
 
@@ -276,6 +287,10 @@ public class SkillCliExecutorService {
 
             // 命令成功后记住它的查询签名：只改 --jq / --format 的重复查询会被识别为重复。
             if (commandResult.exitCode() == 0) {
+                // 写操作改变远端状态，旧查询结果可能已经过期，先清掉旧的查询记忆再记这一条。
+                if (isWriteCommand(command)) {
+                    succeededQuerySignatures.clear();
+                }
                 succeededQuerySignatures.add(signature);
                 repeatedQueryCount = 0;
             }
@@ -353,6 +368,29 @@ public class SkillCliExecutorService {
             kept.add(part);
         }
         return String.join(" ", kept);
+    }
+
+    /**
+     * 判断一条命令是不是写操作。
+     *
+     * <p>写操作之后允许重新查询同一条命令：例如「创建群 → 再查群列表确认」。没有这一步，
+     * 去重会把这类正常流程也一起拦掉。</p>
+     */
+    private boolean isWriteCommand(List<String> command) {
+        for (String part : command) {
+            if (part == null || !part.startsWith("+")) {
+                continue;
+            }
+
+            String shortcut = part.substring(1).toLowerCase(Locale.ROOT);
+            for (String keyword : WRITE_KEYWORDS) {
+                if (shortcut.contains(keyword)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

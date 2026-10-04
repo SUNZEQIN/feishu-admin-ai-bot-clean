@@ -122,6 +122,25 @@ class SkillCliExecutorServiceOptimizationTest {
         assertTrue(prompt.contains("B".repeat(800)), "更早的 observation 至少要保留摘要");
     }
 
+    @Test
+    void writeCommandsAreRecognisedSoRepeatedReadsStillAllowedAfterThem() throws Exception {
+        SkillCliExecutorService service = service();
+        Method method = SkillCliExecutorService.class.getDeclaredMethod("isWriteCommand", List.class);
+        method.setAccessible(true);
+
+        assertTrue((Boolean) method.invoke(service,
+                        List.of("lark-cli", "drive", "+delete", "--file-token", "tok", "--type", "bitable")),
+                "删除是写操作：写完必须允许重新查询，否则「创建/删除后再确认」的正常流程会被误拦");
+        assertTrue((Boolean) method.invoke(service,
+                        List.of("lark-cli", "im", "+messages-reply", "--message-id", "om_x", "--text", "hi")),
+                "发送消息是写操作");
+        assertFalse((Boolean) method.invoke(service,
+                        List.of("lark-cli", "drive", "+search", "--doc-types", "bitable", "--mine")),
+                "搜索是读操作，重复查询必须被拦住");
+        assertFalse((Boolean) method.invoke(service, List.of("lark-cli", "base", "--help")),
+                "help 是只读元命令");
+    }
+
     private List<String> concat(List<String> head, List<String> tail) {
         List<String> all = new ArrayList<>(head);
         all.addAll(tail);
