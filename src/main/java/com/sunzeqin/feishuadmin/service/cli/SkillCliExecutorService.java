@@ -35,7 +35,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Skill + CLI 执行服务。
@@ -48,6 +47,15 @@ import java.util.stream.Collectors;
 public class SkillCliExecutorService {
     // 当前服务使用的日志对象。
     private static final Logger log = LoggerFactory.getLogger(SkillCliExecutorService.class);
+
+    // 同一条已成功查询被连续重复多少次后，判定模型卡住并停止执行。
+    private static final int MAX_REPEATED_QUERY_SKIPS = 3;
+
+    // observations 里最新一条允许保留的 stdout 字符数：给足数据，避免模型看不见完整结果而反复重查。
+    private static final int LATEST_STDOUT_LIMIT = 8000;
+
+    // 更早的 observations 保留的 stdout 字符数：只留摘要，防止提示词无限膨胀。
+    private static final int OLDER_STDOUT_LIMIT = 800;
 
     // 飞书配置，包含 CLI 开关、命令路径、大模型配置。
     private final FeishuProperties properties;
@@ -127,11 +135,22 @@ public class SkillCliExecutorService {
         // 保存所有 CLI 执行观察结果。
         List<CliCommandResult> observations = new ArrayList<>();
 
+        // 已经成功返回过的「查询签名」，用于识别只改了 --jq / --format 的重复查询。
+        Set<String> succeededQuerySignatures = new LinkedHashSet<>();
+
+        // 连续重复查询计数：模型卡住时尽快停下，不要耗到工具总超时。
+        int repeatedQueryCount = 0;
+
         // 第一步固定先查当前业务域的 help，避免 LLM 直接猜命令。
         CliCommandResult helpResult = executeCommand(List.of(properties.getCliCommand(), normalizedDomain, "--help"), senderOpenId);
 
         // 保存 help 结果。
         observations.add(helpResult);
+
+        // help 也是一条查询：同一条 help 重复查同样按重复处理。
+        if (helpResult.exitCode() == 0) {
+            succeededQuerySignatures.add(commandSignature(List.of(properties.getCliCommand(), normalizedDomain, "--help")));
+        }
 
         // help 都失败时直接停止，避免后面模型在没有 CLI 能力说明的情况下继续猜命令。
         if (helpResult.exitCode() != 0) {
@@ -217,11 +236,24 @@ public class SkillCliExecutorService {
                 );
             }
 
-            // 如果模型重复执行已经成功过的相同命令，跳过真实调用，避免浪费步骤和重复请求飞书。
-            if (hasSuccessfulCommand(observations, command)) {
-                String message = "重复命令已跳过，请基于已有成功结果继续下一步：" + String.join(" ", command);
-                log.warn("[阶段5 SkillCLI规划] 重复命令已跳过：业务域={}，步骤={}，命令={}", normalizedDomain, step, command);
-                observations.add(new CliCommandResult(String.join(" ", command), 0, message, ""));
+            // 同一条查询的语义签名：只改 --jq / --format 的重复查询算同一条。
+            String signature = commandSignature(command);
+
+            // 已经成功返回过的同一条查询再跑一次不可能拿到新数据，跳过真实调用并把提示回灌给模型。
+            if (succeededQuerySignatures.contains(signature)) {
+                repeatedQueryCount++;
+                String message = "同一条查询已经成功返回过，只修改 --jq / --format 重新查询不会得到新数据，已跳过执行。"
+                        + "请直接基于已有 observations 继续下一步：需要写操作就直接执行，已经全部完成就输出 final_answer。"
+                        + "命令=" + String.join(" ", command);
+                log.warn("[阶段5 SkillCLI规划] 重复查询已跳过：业务域={}，步骤={}，命令={}，连续跳过次数={}",
+                        normalizedDomain, step, command, repeatedQueryCount);
+                observations.add(new CliCommandResult("SYSTEM_REPEAT_SKIP", 0, message, ""));
+
+                // 连续重复说明模型已经卡住：继续循环只会把工具总超时耗光，直接停下来暴露真实原因。
+                if (repeatedQueryCount >= MAX_REPEATED_QUERY_SKIPS) {
+                    throw new IllegalStateException("模型连续 " + MAX_REPEATED_QUERY_SKIPS
+                            + " 次重复同一条已经成功过的查询，已停止执行。命令=" + String.join(" ", command));
+                }
                 continue;
             }
 
@@ -241,6 +273,12 @@ public class SkillCliExecutorService {
 
             // 保存执行结果。
             observations.add(commandResult);
+
+            // 命令成功后记住它的查询签名：只改 --jq / --format 的重复查询会被识别为重复。
+            if (commandResult.exitCode() == 0) {
+                succeededQuerySignatures.add(signature);
+                repeatedQueryCount = 0;
+            }
 
             // CLI 明确返回缺少用户授权 scope 时，生成授权链接并停止当前任务。
             String missingScopes = extractMissingScopes(commandResult);
@@ -291,20 +329,30 @@ public class SkillCliExecutorService {
         throw new IllegalStateException("Skill + CLI 超过最大步骤数，已停止执行。最后一次失败原因：" + lastFailure);
     }
 
-    private boolean hasSuccessfulCommand(List<CliCommandResult> observations, List<String> command) {
-        // 拼接当前命令文本，和历史 observation 中的命令保持同一格式。
-        String commandText = String.join(" ", command);
-
-        // 遍历历史执行结果。
-        for (CliCommandResult observation : observations) {
-            // 只拦截已经成功执行过的完全相同命令。
-            if (observation.exitCode() == 0 && commandText.equals(observation.command())) {
-                return true;
+    /**
+     * 计算一条命令的「查询签名」。
+     *
+     * <p>只修改输出投影的参数（--jq / -q / --format / --json）不算新查询：它们不改变
+     * lark-cli 实际请求的数据，只改变本地怎么展示。模型反复改 --jq 重跑同一条搜索时拿到的
+     * 永远是同一份数据，必须按重复处理，否则会烧完全部步骤并撞上工具总超时。</p>
+     */
+    private String commandSignature(List<String> command) {
+        // 需要连同它的值一起忽略的参数名。
+        Set<String> valueFlags = Set.of("--jq", "-q", "--format");
+        List<String> kept = new ArrayList<>();
+        for (int i = 0; i < command.size(); i++) {
+            String part = command.get(i);
+            if ("--json".equals(part)) {
+                continue;
             }
+            if (valueFlags.contains(part)) {
+                // 跳过参数名和它后面紧跟的值。
+                i++;
+                continue;
+            }
+            kept.add(part);
         }
-
-        // 没有重复成功命令。
-        return false;
+        return String.join(" ", kept);
     }
 
     /**
@@ -584,7 +632,7 @@ public class SkillCliExecutorService {
                 17. 如果 bot 身份缺少应用权限，要返回真实失败原因，不要自动切换到 user 身份规避权限。
                 18. lark-cli skills read 是只读资料查询命令，可以用来读取内置技能说明，但它不是业务执行结果。
                 19. 如果某条列表命令已经带 --page-all 并且退出码为 0，不要再用相同 page-token 重复拉取同一页；应该基于已有结果继续下一步。
-                20. 不要重复执行 observations 中已经成功执行过的完全相同命令。
+                20. 不要重复执行同一条查询：只把 --jq / --format 换成另一种写法、或只换提取的字段，都不算新命令；已经成功返回过的查询直接用已有结果继续下一步。observations 里标注「已截断」的结果也不要靠重跑同一条查询去看全，改用更精确的过滤条件。
                 21. 对“整理聊天成文档并发送”这类任务，读取群消息成功后要尽快创建文档并发送链接，不要反复读取技能说明或重复分页。
                 22. 发送飞书卡片或重要结果到当前群时，优先使用 im +messages-reply 引用 originalMessageId，而不是普通 send。
                 23. 群聊里发送文本、Markdown、卡片时，内容开头要 @ senderOpenId 对应的人。
@@ -686,30 +734,33 @@ public class SkillCliExecutorService {
      * 否则搜索输出越大，每一轮 LLM 规划越慢，最终触发工具总超时。</p>
      */
     private String compactObservationText(List<CliCommandResult> observations) {
-        List<Map<String, Object>> compact = observations.stream()
-                .map(this::compactObservation)
-                .collect(Collectors.toList());
+        List<Map<String, Object>> compact = new ArrayList<>();
+        for (int i = 0; i < observations.size(); i++) {
+            // 最新一条保留更多原文：模型看不见完整结果时，会反复重查同一条命令。
+            boolean latest = i == observations.size() - 1;
+            compact.add(compactObservation(observations.get(i), latest ? LATEST_STDOUT_LIMIT : OLDER_STDOUT_LIMIT));
+        }
         return jsonUtils.write(compact);
     }
 
-    private Map<String, Object> compactObservation(CliCommandResult observation) {
+    private Map<String, Object> compactObservation(CliCommandResult observation, int stdoutLimit) {
         return Map.of(
                 "command", safeText(observation.command()),
                 "exitCode", observation.exitCode(),
                 "stdout长度", length(observation.stdout()),
                 "stderr长度", length(observation.stderr()),
-                "stdout摘要", compactText(observation.stdout()),
-                "stderr摘要", compactText(observation.stderr())
+                "stdout摘要", compactText(observation.stdout(), stdoutLimit),
+                "stderr摘要", compactText(observation.stderr(), OLDER_STDOUT_LIMIT)
         );
     }
 
-    private String compactText(String text) {
+    private String compactText(String text, int limit) {
         String value = safeText(text).replaceAll("\\s+", " ").trim();
-        int limit = 800;
         if (value.length() <= limit) {
             return value;
         }
-        return value.substring(0, limit) + "...（已截断，原始长度=" + value.length() + "）";
+        return value.substring(0, limit) + "...（已截断，原始长度=" + value.length()
+                + "。不要为了看全而重跑同一条查询）";
     }
 
     private String extractMissingScopes(CliCommandResult commandResult) {
