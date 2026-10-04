@@ -1094,6 +1094,9 @@ public class SkillCliExecutorService {
             return new ArrayList<>(List.of(properties.getCliCommand(), "wiki", "+node-delete",
                     "--node-token", file.token(),
                     "--obj-type", "wiki",
+                    // 默认是级联删除整棵子树，这里改成只删这个节点、把子节点上提，
+                    // 免得「删一个表格」顺手带走它下面的所有子节点。
+                    "--include-children=false",
                     "--yes",
                     "--as", "user",
                     "--format", "json"));
