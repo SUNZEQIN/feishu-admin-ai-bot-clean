@@ -161,6 +161,26 @@ class AgentOrchestratorServiceTest {
         assertEquals("缺少工具调用参数", repository.lastStage());
     }
 
+    @Test
+    void terminalToolReplyEndsTheTurnWithoutExtraPlannerCalls() {
+        // 工具自带终态回复（Java 已经算完的结论），外层必须直接采用并结束这一轮。
+        AgentPlannerService planner = plannerWith(
+                toolCall("cli.run_skill", Map.of("domain", "base", "goal", "删除我名下最早的10个多维表格")),
+                finalAnswer("模型自己的解释：步骤太多了"));
+
+        ToolRegistryService registry = registryReturning(ToolResult.success("cli.run_skill", "执行完成",
+                Map.of("terminal", true, "finalReply", "已删除 2/10 个多维表格：\n✅ A\n❌ B：not found")));
+
+        AgentRunResult result = orchestrator(planner, registry, BotRole.L1).run(event());
+
+        // 结论必须来自工具，不能被模型的二次解释覆盖成「步骤过多」。
+        assertTrue(result.success());
+        assertTrue(result.reply().contains("已删除 2/10"),
+                "终态回复要原样采用，否则用户看到的是模型编的解释而不是真实结果");
+        assertEquals("SUCCESS", repository.lastStatus());
+        assertEquals(1, repository.toolCalls.size(), "终态回复之后不应再调用工具");
+    }
+
     private AgentOrchestratorService orchestrator(AgentPlannerService planner, ToolRegistryService registry,
             BotRole role) {
         // 用假仓库与真实的审计、标注服务组装编排器。

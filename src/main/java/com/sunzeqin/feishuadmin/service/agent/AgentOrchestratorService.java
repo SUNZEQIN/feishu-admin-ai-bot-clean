@@ -218,6 +218,22 @@ public class AgentOrchestratorService {
             }
 
             // 工具失败时结束执行，并把原因回复给用户。
+            // 工具自带终态回复时直接结束这一轮，把结论原样交给用户。
+            // 这类结果是 Java 算完的最终结论（例如「已删除 2/10，第 3 个失败」），
+            // 再让模型解释一遍，它只会重复调用工具，最后覆盖成「步骤过多」。
+            String terminalReply = terminalReplyFromToolResult(result);
+            if (!terminalReply.isBlank()) {
+                String finalText = dataSourceNoticeService.apply(terminalReply, observations);
+                log.info("[阶段4 工具调用] 工具返回终态回复，直接结束流程：消息ID={}，步骤={}，工具={}，回复长度={}",
+                        event.messageId(), step, result.tool(), finalText.length());
+                AgentRunResult runResult = new AgentRunResult(true, finalText);
+                memoryService.saveAssistantMessage(event, runResult.reply());
+                taskAuditService.finishTask(taskId,
+                        pendingConfirm ? AgentTaskStatus.WAITING_CONFIRM : AgentTaskStatus.SUCCESS,
+                        pendingConfirm ? "等待用户确认" : "生成最终回复", null, "");
+                return runResult;
+            }
+
             if (!result.success()) {
                 // 打印工具失败导致 Agent 结束的日志。
                 log.warn("[阶段4 工具调用] 工具失败导致流程结束：消息ID={}，步骤={}，工具={}，原因={}",
@@ -288,6 +304,32 @@ public class AgentOrchestratorService {
             // 未知错误码不猜，按内部错误记。
             return ToolErrorCode.INTERNAL_ERROR;
         }
+    }
+
+    /**
+     * 读取工具结果里的终态回复。
+     *
+     * <p>工具在 data 里放了 <code>terminal=true</code> 时，表示这条 finalReply 已经是
+     * Java 算完的最终结论，外层应当直接回复用户并结束，不要再让模型解释一遍。</p>
+     */
+    private String terminalReplyFromToolResult(ToolResult result) {
+        // 空结果直接返回空字符串。
+        if (result == null || result.data() == null || result.data().isEmpty()) {
+            return "";
+        }
+
+        // 没有终态标记时不处理。
+        if (!Boolean.TRUE.equals(result.data().get("terminal"))) {
+            return "";
+        }
+
+        // 读取工具已经整理好的用户回复。
+        Object finalReply = result.data().get("finalReply");
+        if (finalReply == null || finalReply.toString().isBlank()) {
+            return "";
+        }
+
+        return finalReply.toString();
     }
 
     private String authorizeReplyFromToolResult(ToolResult result) {

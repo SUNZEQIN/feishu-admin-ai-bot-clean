@@ -1154,6 +1154,10 @@ public class SkillCliExecutorService {
         result.put("sourceChatId", sourceChatId);
         result.put("finalReply", reply);
         result.put("observations", observations);
+        // 这条回复是 Java 已经算完的终态结论：外层拿到后应当直接结束这一轮。
+        // 否则模型会把「已删除 2/10」当成中间观察，继续重复调用工具，
+        // 最后把真实结论覆盖成一句「本次任务步骤过多，已停止执行」。
+        result.put("terminal", true);
         if (needConfirm) {
             result.put("needConfirm", true);
         }
