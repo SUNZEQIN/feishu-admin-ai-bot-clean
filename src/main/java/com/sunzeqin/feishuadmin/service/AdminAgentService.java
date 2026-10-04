@@ -316,10 +316,8 @@ public class AdminAgentService {
         // 生成 OAuth 链接。这个链路由 Java 服务保存 token，不依赖 lark-cli 交互式登录。
         String authorizeUrl = userOAuthTokenService.createAuthorizeUrl(event, scopeText);
 
-        // 返回授权说明。
-        String text = "需要你授权后才能以用户身份执行。\n\n"
-                + "请扫描二维码完成授权。\n\n"
-                + "授权完成后，系统会保存到用户表并定时刷新 token。";
+        // 返回授权说明：不仅提示扫码，也要告诉用户当前申请哪些权限。
+        String text = OAuthPermissionReplyFormatter.userAuthorizationRequired(scopeMappingService, domain, scopeText);
 
         // 返回授权说明和内部使用的授权链接。
         return new AuthorizationReply(text, authorizeUrl);

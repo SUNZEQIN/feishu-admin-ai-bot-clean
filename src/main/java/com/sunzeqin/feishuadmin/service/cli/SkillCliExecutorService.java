@@ -8,6 +8,7 @@ import com.sunzeqin.feishuadmin.pojo.cli.CliCommandResult;
 import com.sunzeqin.feishuadmin.pojo.cli.CliStepDecision;
 import com.sunzeqin.feishuadmin.service.FeishuUserScopeMappingService;
 import com.sunzeqin.feishuadmin.service.FeishuOpenApiService;
+import com.sunzeqin.feishuadmin.service.OAuthPermissionReplyFormatter;
 import com.sunzeqin.feishuadmin.service.UserOAuthTokenService;
 import com.sunzeqin.feishuadmin.utils.JsonUtils;
 import com.sunzeqin.feishuadmin.utils.LlmErrorUtils;
@@ -263,9 +264,8 @@ public class SkillCliExecutorService {
                 String requiredScopes = mergeWithDomainScopes(normalizedDomain, missingScopes);
                 String authorizeUrl = buildAuthorizeUrl(sourceChatId, originalMessageId, senderOpenId,
                         senderUserId, requiredScopes);
-                String reply = "需要你授权后才能继续执行。\n\n"
-                        + "请扫描二维码完成授权。\n\n"
-                        + "授权完成后，系统会保存到用户表并定时刷新 token。";
+                String reply = OAuthPermissionReplyFormatter.continuationAuthorizationRequired(
+                        scopeMappingService, normalizedDomain, requiredScopes);
                 return Map.of(
                         "domain", normalizedDomain,
                         "goal", goal,
@@ -459,9 +459,8 @@ public class SkillCliExecutorService {
 
         // 没有 token 或 scope 不足时直接生成授权链接。
         String authorizeUrl = buildAuthorizeUrl(sourceChatId, originalMessageId, senderOpenId, senderUserId, scopeText);
-        String reply = "需要你授权后才能以用户身份继续执行。\n\n"
-                + "请扫描二维码完成授权。\n\n"
-                + "授权完成后，系统会保存到用户表并定时刷新 token。";
+        String reply = OAuthPermissionReplyFormatter.userAuthorizationRequired(
+                scopeMappingService, normalizedDomain, scopeText);
 
         // 返回授权结果，让外层直接回复给用户。
         return Map.of(
