@@ -89,6 +89,27 @@ class DestructiveCommandGuardTest {
     }
 
     @Test
+    void letsHelpThroughSoTheConfirmPromptShowsTheRealCommand() {
+        // 端到端验证时发现的过度拦截：模型面对删除任务的第一步是读 +delete 的用法，
+        // 如果连 --help 都拦，用户确认后仍会卡在第一步，而且提示里展示的是一条 help 命令。
+        List<String> helpCommand = List.of("lark-cli", "drive", "+delete", "--help");
+
+        assertFalse(guard.check(helpCommand, "用我的身份删掉所有多维表格").blocked(),
+                "--help 是只读的，不应拦截");
+        assertFalse(guard.check(helpCommand, "用我的身份删掉所有多维表格").destructive());
+
+        // 但真正的删除必须照拦。
+        List<String> realDelete = List.of("lark-cli", "drive", "+delete",
+                "--file-token", "FAKEGATEtoken0001", "--type", "bitable", "--as", "user");
+        assertTrue(guard.check(realDelete, "用我的身份删掉所有多维表格").blocked(),
+                "真正的删除命令必须拦截，提示里才能看到要删什么");
+
+        // --yes 的优先级高于 --help：显式的高风险标记仍然算破坏性。
+        assertTrue(guard.check(List.of("lark-cli", "drive", "+delete", "--help", "--yes"), "删掉表格").destructive(),
+                "--yes 的高风险标记不应被 --help 掩盖");
+    }
+
+    @Test
     void toleratesEmptyInput() {
         assertFalse(guard.check(List.of(), "删掉所有表格").blocked());
         assertFalse(guard.check(null, "删掉所有表格").blocked());

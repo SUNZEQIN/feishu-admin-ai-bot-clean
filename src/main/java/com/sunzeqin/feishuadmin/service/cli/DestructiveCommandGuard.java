@@ -73,6 +73,13 @@ public class DestructiveCommandGuard {
             return AUTO_CONFIRM_FLAG;
         }
 
+        // 只读元命令一律放行。--help 只打印用法，不会执行任何写操作；
+        // 如果连它都拦，模型连「删除命令怎么用」都读不到，用户确认后也会卡在第一步，
+        // 而且拦截提示里展示的会是一条 help 命令，看不出真正要删什么。
+        if (command.contains("--help") || command.contains("-h")) {
+            return null;
+        }
+
         // lark-cli 的命令形状是 lark-cli <domain> +<shortcut>，动作只可能写在 + 子命令名上。
         for (String part : command) {
             if (part == null || !part.startsWith("+")) {
