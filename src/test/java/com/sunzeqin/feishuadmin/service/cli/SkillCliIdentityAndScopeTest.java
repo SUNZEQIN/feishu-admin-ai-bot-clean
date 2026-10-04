@@ -155,6 +155,30 @@ class SkillCliIdentityAndScopeTest {
                 "业务域为空时应判定为没有 token");
     }
 
+    @Test
+    void mergesAuthorizationScopesForCompositeFeishuDocumentTasks() throws Exception {
+        FeishuUserScopeMappingService scopeMapping = mock(FeishuUserScopeMappingService.class);
+        when(scopeMapping.scopeTextForDomains(List.of("drive", "docs")))
+                .thenReturn("offline_access drive:drive docs:doc");
+        when(scopeMapping.scopeTextForDomains(List.of("base", "drive")))
+                .thenReturn("offline_access base:app:read drive:drive");
+        when(scopeMapping.scopeTextForDomain("calendar"))
+                .thenReturn("offline_access calendar:calendar:read");
+        SkillCliExecutorService service = newService(scopeMapping);
+
+        assertEquals("offline_access drive:drive docs:doc",
+                invokeAuthorizationScopeText(service, "drive", "查询我名下所有云文档"),
+                "云文档是复合概念，应一次性申请 drive + docs，避免扫两次码");
+
+        assertEquals("offline_access base:app:read drive:drive",
+                invokeAuthorizationScopeText(service, "base", "将电商数据导入一张新建的多维表格，用我的身份"),
+                "导入/新建多维表格涉及云盘文件创建/导入，应一次性申请 base + drive");
+
+        assertEquals("offline_access calendar:calendar:read",
+                invokeAuthorizationScopeText(service, "calendar", "用我的身份查看日程"),
+                "普通单域任务仍只申请当前业务域");
+    }
+
     // ---------- 测试辅助 ----------
 
     private SkillCliExecutorService newService() {
@@ -225,5 +249,13 @@ class SkillCliIdentityAndScopeTest {
         Method method = SkillCliExecutorService.class.getDeclaredMethod("mergeWithDomainScopes", String.class, String.class);
         method.setAccessible(true);
         return (String) method.invoke(service, domain, missingScopes);
+    }
+
+    private String invokeAuthorizationScopeText(SkillCliExecutorService service, String domain, String goal)
+            throws Exception {
+        Method method = SkillCliExecutorService.class.getDeclaredMethod("authorizationScopeTextForGoal",
+                String.class, String.class);
+        method.setAccessible(true);
+        return (String) method.invoke(service, domain, goal);
     }
 }

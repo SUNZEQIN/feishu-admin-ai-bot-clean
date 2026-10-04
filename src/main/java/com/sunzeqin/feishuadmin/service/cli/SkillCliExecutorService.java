@@ -436,8 +436,10 @@ public class SkillCliExecutorService {
             return Map.of();
         }
 
-        // 根据当前业务域计算用户身份需要的 scope。
-        String scopeText = scopeMappingService.scopeTextForDomain(normalizedDomain);
+        // 根据当前业务域 + 用户目标计算用户身份需要的 scope。
+        // 不能只看单个 domain：例如“云文档”实际横跨 drive/docs；“导入/新建多维表格”常横跨 base/drive。
+        // 这里预先合并，避免用户刚扫完 drive，又因为 docs/base 缺权限被要求再扫一次。
+        String scopeText = authorizationScopeTextForGoal(normalizedDomain, goal);
 
         // 打印授权 scope，方便排查为什么生成这个授权链接。
         log.info("[阶段4 工具调用] 用户身份授权scope映射：业务域={}，scope数量={}，scope={}",
@@ -472,6 +474,29 @@ public class SkillCliExecutorService {
                 "finalReply", reply,
                 "observations", List.of()
         );
+    }
+
+    private String authorizationScopeTextForGoal(String domain, String goal) {
+        String normalizedDomain = normalizeDomain(domain);
+        String normalizedGoal = goal == null ? "" : goal.toLowerCase(Locale.ROOT);
+
+        // “云文档”在飞书里常同时涉及：
+        // - drive：云盘/云空间文件搜索、token/URL 解析、导入导出、文件列表；
+        // - docs：Docx 正文读取/创建/编辑。
+        // 只授权其中一个，真实任务很容易走到第二个域后再次弹二维码。
+        if (normalizedGoal.contains("云文档")) {
+            return scopeMappingService.scopeTextForDomains(List.of("drive", "docs"));
+        }
+
+        // 新建/导入多维表格通常不是纯 base：文件创建、导入 CSV/Excel/Markdown/.base、云盘资源定位
+        // 经常要走 drive，再进入 base 处理表内数据。
+        if ("base".equals(normalizedDomain)
+                && (normalizedGoal.contains("导入") || normalizedGoal.contains("新建")
+                || normalizedGoal.contains("创建") || normalizedGoal.contains("上传"))) {
+            return scopeMappingService.scopeTextForDomains(List.of("base", "drive"));
+        }
+
+        return scopeMappingService.scopeTextForDomain(normalizedDomain);
     }
 
     private ChatModel buildChatModel(FeishuProperties properties) {
