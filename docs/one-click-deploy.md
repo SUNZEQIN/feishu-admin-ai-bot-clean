@@ -112,9 +112,15 @@ cd /opt/feishu-admin-ai-bot-clean-test && bash scripts/deploy.sh
 
 | 配置 | 正式环境 | 测试环境 | 不改会怎样 |
 | --- | --- | --- | --- |
-| `SERVER_PORT` | `8082` | `8083` | 端口被占用，容器起不来 |
+| `SERVER_PORT` | `8082` | `8091` | 端口被占用，容器起不来 |
 | `CONTAINER_NAME` | `feishu-admin-ai-bot-clean` | `feishu-admin-ai-bot-clean-test` | 容器名冲突，报 name already in use |
-| `FEISHU_OAUTH_REDIRECT_URI` | `...:8082/...` | `...:8083/...` | 扫码授权后回调打不开 |
+| `FEISHU_OAUTH_REDIRECT_URI` | `...:8082/...` | `...:8091/...` | 扫码授权后回调打不开 |
+
+选端口时注意同一台服务器上已有的占用：`8081` 是 Dify 的 nginx，`8082` 是正式环境，`8090` 是
+`ecommerce-mcp-server`（也正是机器人自己通过 `FEISHU_ECOMMERCE_MCP_BASE_URL` 调用的后端）。
+把机器人放到 `8090` 会直接报 `port already allocated`，而且会压到自己的依赖上。
+
+改端口后除了 `.env`，还要**同步改飞书开放平台里 OAuth 重定向 URL 的白名单**，否则扫码授权会失败。
 
 注意：**飞书事件回调地址只能指向其中一个环境**。两个容器同时跑不会「双份回复」，但只有回调地址指向的那个环境能收到消息。切环境要去飞书开放平台改事件订阅地址，并在云服务器安全组放行对应端口。
 
